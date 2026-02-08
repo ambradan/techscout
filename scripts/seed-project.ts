@@ -18,8 +18,13 @@ import {
   createCFFinding,
   upsertStackHealth,
   upsertGovernanceMetadata,
+  getProjectBySlug,
+  deleteProject,
+  createFeedItem,
+  createRecommendation,
 } from '../src/db/queries';
 import { logger } from '../src/lib/logger';
+import { generateRecommendationTraceId } from '../src/lib/ifx';
 
 // ============================================================
 // SAMPLE DATA (from project_profile.schema.yaml)
@@ -226,6 +231,163 @@ const SAMPLE_STACK_HEALTH = {
 };
 
 // ============================================================
+// SAMPLE FEED ITEMS
+// ============================================================
+
+const SAMPLE_FEED_ITEMS = [
+  {
+    sourceName: 'Hacker News',
+    sourceTier: 'tier2',
+    sourceReliability: 'high',
+    externalId: 'hn-12345678',
+    title: 'BetterAuth: A modern authentication library for TypeScript',
+    url: 'https://news.ycombinator.com/item?id=12345678',
+    description: 'Show HN: BetterAuth - TypeScript-first auth with built-in JWT expiry, RBAC, and OAuth providers',
+    contentSummary: 'A new authentication library that addresses common security pitfalls in TypeScript apps. Features automatic JWT expiry, role-based access control, and seamless integration with Next.js and FastAPI.',
+    publishedAt: '2026-02-05T14:30:00Z',
+    categories: ['security', 'authentication', 'typescript'],
+    technologies: ['TypeScript', 'Next.js', 'FastAPI'],
+    languageEcosystems: ['npm'],
+    traction: {
+      points: 342,
+      comments: 87,
+      velocity: 'rising',
+    },
+  },
+  {
+    sourceName: 'GitHub Trending',
+    sourceTier: 'tier1',
+    sourceReliability: 'high',
+    externalId: 'gh-better-auth/better-auth',
+    title: 'better-auth/better-auth',
+    url: 'https://github.com/better-auth/better-auth',
+    description: 'The most comprehensive authentication library for TypeScript',
+    contentSummary: 'Framework-agnostic authentication and authorization library. 15k+ stars, active maintenance, comprehensive documentation. Supports JWT with automatic expiry, session management, OAuth 2.0, and RBAC.',
+    publishedAt: '2026-02-06T08:00:00Z',
+    categories: ['security', 'authentication', 'library'],
+    technologies: ['TypeScript', 'Node.js'],
+    languageEcosystems: ['npm'],
+    traction: {
+      stars: 15234,
+      forks: 892,
+      weeklyDownloads: 125000,
+      trending_rank: 3,
+    },
+  },
+];
+
+// ============================================================
+// SAMPLE RECOMMENDATION (BetterAuth from schema)
+// ============================================================
+
+const createBetterAuthRecommendation = (projectId: string, feedItemId: string) => ({
+  projectId,
+  feedItemId,
+  ifxTraceId: generateRecommendationTraceId(),
+  modelUsed: 'claude-sonnet-4-5-20250929',
+  type: 'technology_replacement',
+  action: 'REPLACE_EXISTING',
+  priority: 'high',
+  confidence: 0.78,
+  subject: {
+    name: 'BetterAuth',
+    version: '1.2.0',
+    ecosystem: 'npm',
+    url: 'https://github.com/better-auth/better-auth',
+  },
+  replaces: 'jsonwebtoken, custom auth logic in auth-middleware.ts',
+  complements: undefined,
+  enables: 'automatic JWT expiry, RBAC, OAuth providers',
+  roleVisibility: ['developer_fullstack', 'tech_lead', 'security'],
+  stabilityAssessment: {
+    costOfChange: 0.45,
+    costOfNoChange: 0.65,
+    netBenefit: 0.20,
+    risks: [
+      'Migration requires updating 3 auth endpoints',
+      'Learning curve for new API (~2 days)',
+    ],
+    mitigations: [
+      'Official migration guide available',
+      'Backward-compatible adapter available',
+    ],
+  },
+  technical: {
+    summary: 'BetterAuth v1.2 risolve direttamente CF-2026-002 (JWT senza expiry) e offre un\'API più moderna rispetto a jsonwebtoken.',
+    claims: [
+      {
+        ifxTag: 'FACT',
+        claim: 'BetterAuth 1.2.0 ha oltre 15,000 stelle su GitHub e 125,000 download settimanali su npm.',
+        source: 'github_api',
+        sourceReliability: 'high',
+      },
+      {
+        ifxTag: 'FACT',
+        claim: 'Il progetto usa jsonwebtoken 9.0.2 senza gestione esplicita dell\'expiry (CF-2026-002).',
+        source: 'code_forensics_l1',
+        sourceReliability: 'high',
+        cfFindingId: 'CF-2026-002',
+      },
+      {
+        ifxTag: 'INFERENCE',
+        claim: 'La migrazione a BetterAuth eliminerebbe il finding CF-2026-002 e ridurrebbe il debito tecnico di sicurezza.',
+        derivedFrom: ['FACT-1', 'FACT-2'],
+        confidence: 0.85,
+      },
+      {
+        ifxTag: 'ASSUMPTION',
+        claim: 'Il team ha familiarità con pattern di autenticazione moderni.',
+        validated: undefined,
+      },
+    ],
+    integrationSteps: [
+      'npm install better-auth',
+      'Creare better-auth.config.ts con provider JWT',
+      'Migrare auth-middleware.ts usando adapter BetterAuth',
+      'Aggiornare i 3 endpoint identificati da CF-2026-002',
+      'Rimuovere jsonwebtoken dal package.json',
+    ],
+    estimatedLoc: {
+      added: 45,
+      removed: 120,
+      modified: 80,
+    },
+    testingRecommendations: [
+      'Test di regressione su tutti gli endpoint autenticati',
+      'Verifica expiry token in staging',
+      'Penetration test post-migrazione',
+    ],
+  },
+  humanFriendly: {
+    headline: 'Aggiorna l\'autenticazione per maggiore sicurezza',
+    whyItMatters: 'Il sistema attuale ha una vulnerabilità nota (token senza scadenza). BetterAuth risolve questo problema automaticamente e aggiunge funzionalità moderne.',
+    effort: 'Circa 1-2 giorni di lavoro per un developer',
+    risk: 'Basso rischio con testing adeguato. Rollback facile se necessario.',
+    recommendation: 'Consigliato per il prossimo sprint. Migliora sicurezza senza modifiche all\'architettura.',
+  },
+  kqr: {
+    overallConfidence: 0.78,
+    sourcesUsed: [
+      { source: 'GitHub API', type: 'automated_scan', reliability: 'high', weight: 0.9 },
+      { source: 'npm Registry', type: 'traction_signal', reliability: 'high', weight: 0.85 },
+      { source: 'Code Forensics L1', type: 'deterministic_analysis', reliability: 'high', weight: 0.95 },
+      { source: 'Hacker News', type: 'community_signal', reliability: 'medium', weight: 0.6 },
+    ],
+    crossValidation: {
+      sourcesAgreeing: 4,
+      sourcesConflicting: 0,
+      sourcesInsufficient: 0,
+    },
+    confidenceBreakdown: {
+      factualBasis: 0.90,
+      inferenceQuality: 0.85,
+      assumptionRisk: 0.15,
+    },
+    qualificationStatement: 'Raccomandazione basata su 4 fonti indipendenti, di cui 3 ad alta affidabilità. Confidenza complessiva 0.78.',
+  },
+});
+
+// ============================================================
 // MAIN SEED FUNCTION
 // ============================================================
 
@@ -245,6 +407,18 @@ async function seed() {
   const ownerId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
   try {
+    // 0. IDEMPOTENT: Delete existing project if it exists
+    logger.info('Checking for existing project...');
+    const existingProject = await getProjectBySlug(ownerId, SAMPLE_PROJECT.slug);
+    if (existingProject) {
+      logger.info('Existing project found, deleting...', {
+        projectId: existingProject.id,
+        slug: existingProject.slug
+      });
+      await deleteProject(existingProject.id);
+      logger.info('Existing project deleted');
+    }
+
     // 1. Create project
     logger.info('Creating project...');
     const project = await createProject({
@@ -335,6 +509,35 @@ async function seed() {
     });
     logger.info('Governance metadata created');
 
+    // 9. Create feed items
+    logger.info('Creating feed items...');
+    const createdFeedItems: { id: string; title: string }[] = [];
+    for (const feedItem of SAMPLE_FEED_ITEMS) {
+      const created = await createFeedItem(feedItem);
+      createdFeedItems.push({ id: created.id, title: created.title });
+      logger.info('Feed item created', {
+        id: created.id,
+        source: feedItem.sourceName,
+        title: feedItem.title,
+      });
+    }
+
+    // 10. Create recommendation (BetterAuth)
+    logger.info('Creating recommendation...');
+    // Use the GitHub Trending feed item as the source
+    const githubFeedItem = createdFeedItems.find(f => f.title === 'better-auth/better-auth');
+    const recommendationData = createBetterAuthRecommendation(
+      project.id,
+      githubFeedItem?.id ?? createdFeedItems[0].id
+    );
+    const recommendation = await createRecommendation(recommendationData);
+    logger.info('Recommendation created', {
+      id: recommendation.id,
+      subject: recommendationData.subject.name,
+      action: recommendationData.action,
+      confidence: recommendationData.confidence,
+    });
+
     // Summary
     logger.info('Seed completed successfully!', {
       projectId: project.id,
@@ -342,6 +545,8 @@ async function seed() {
       teamMembers: SAMPLE_TEAM.length,
       sources: SAMPLE_SOURCES.length,
       cfFindings: SAMPLE_CF_FINDINGS.length,
+      feedItems: createdFeedItems.length,
+      recommendations: 1,
     });
 
     console.log('\n===========================================');
@@ -351,6 +556,13 @@ async function seed() {
     console.log(`Project Name: ${project.name}`);
     console.log(`Project Slug: ${project.slug}`);
     console.log(`Owner ID: ${ownerId}`);
+    console.log('-------------------------------------------');
+    console.log(`Team Members: ${SAMPLE_TEAM.length}`);
+    console.log(`Sources: ${SAMPLE_SOURCES.length}`);
+    console.log(`CF Findings: ${SAMPLE_CF_FINDINGS.length}`);
+    console.log(`Feed Items: ${createdFeedItems.length}`);
+    console.log(`Recommendations: 1 (BetterAuth)`);
+    console.log(`Recommendation ID: ${recommendation.id}`);
     console.log('===========================================\n');
 
   } catch (error) {
