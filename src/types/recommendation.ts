@@ -6,351 +6,400 @@
  * Governed by IFX/KQR.
  */
 
+import { z } from 'zod';
+import { IFXFactSchema, IFXInferenceSchema, IFXAssumptionSchema, IFXTraceIdSchema } from './ifx';
 import type { IFXFact, IFXInference, IFXAssumption, IFXTraceId } from './ifx';
+import { KQRQualificationSchema } from './kqr';
 import type { KQRQualification } from './kqr';
+import { TeamRoleSchema, BreakingChangeAlertTypeSchema } from './project-profile';
 import type { TeamRole, BreakingChangeAlertType } from './project-profile';
 
 // ============================================================
 // ENUMS AND CONSTANTS
 // ============================================================
 
-export type RecommendationType = 'recommendation' | 'breaking_change_alert';
+export const RecommendationTypeSchema = z.enum(['recommendation', 'breaking_change_alert']);
+export type RecommendationType = z.infer<typeof RecommendationTypeSchema>;
 
-export type RecommendationAction =
-  | 'REPLACE_EXISTING'
-  | 'COMPLEMENT'
-  | 'NEW_CAPABILITY'
-  | 'MONITOR';
+export const RecommendationActionSchema = z.enum([
+  'REPLACE_EXISTING',
+  'COMPLEMENT',
+  'NEW_CAPABILITY',
+  'MONITOR',
+]);
+export type RecommendationAction = z.infer<typeof RecommendationActionSchema>;
 
-export type RecommendationPriority = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export const RecommendationPrioritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
+export type RecommendationPriority = z.infer<typeof RecommendationPrioritySchema>;
 
-export type SubjectType =
-  | 'library'
-  | 'framework'
-  | 'platform'
-  | 'tool'
-  | 'service'
-  | 'pattern'
-  | 'practice';
+export const SubjectTypeSchema = z.enum([
+  'library',
+  'framework',
+  'platform',
+  'tool',
+  'service',
+  'pattern',
+  'practice',
+]);
+export type SubjectType = z.infer<typeof SubjectTypeSchema>;
 
-export type SubjectMaturity =
-  | 'experimental'
-  | 'growth'
-  | 'stable'
-  | 'declining'
-  | 'deprecated';
+export const SubjectMaturitySchema = z.enum([
+  'experimental',
+  'growth',
+  'stable',
+  'declining',
+  'deprecated',
+]);
+export type SubjectMaturity = z.infer<typeof SubjectMaturitySchema>;
 
-export type RiskLevel = 'none' | 'low' | 'medium' | 'high' | 'critical';
+export const RiskLevelSchema = z.enum(['none', 'low', 'medium', 'high', 'critical']);
+export type RiskLevel = z.infer<typeof RiskLevelSchema>;
 
-export type Reversibility = 'easy' | 'medium' | 'hard' | 'irreversible';
+export const ReversibilitySchema = z.enum(['easy', 'medium', 'hard', 'irreversible']);
+export type Reversibility = z.infer<typeof ReversibilitySchema>;
 
-export type StabilityVerdict = 'RECOMMEND' | 'MONITOR' | 'DEFER';
+export const StabilityVerdictSchema = z.enum(['RECOMMEND', 'MONITOR', 'DEFER']);
+export type StabilityVerdict = z.infer<typeof StabilityVerdictSchema>;
 
-export type FeedbackStatus =
-  | 'pending'
-  | 'useful'
-  | 'not_relevant'
-  | 'already_knew'
-  | 'adopted'
-  | 'dismissed';
+export const FeedbackStatusSchema = z.enum([
+  'pending',
+  'useful',
+  'not_relevant',
+  'already_knew',
+  'adopted',
+  'dismissed',
+]);
+export type FeedbackStatus = z.infer<typeof FeedbackStatusSchema>;
 
-export type ActionRequired = 'IMMEDIATE' | 'PLAN' | 'MONITOR';
+export const ActionRequiredSchema = z.enum(['IMMEDIATE', 'PLAN', 'MONITOR']);
+export type ActionRequired = z.infer<typeof ActionRequiredSchema>;
 
 // ============================================================
 // SUBJECT (the thing being recommended)
 // ============================================================
 
-export interface SubjectTraction {
-  githubStars?: number;
-  githubStars30dGrowth?: string;
-  npmWeeklyDownloads?: number;
-  pypiMonthlyDownloads?: number;
-  firstRelease?: string;
-  lastRelease?: string;
-  contributors?: number;
-  openIssues?: number;
-}
+export const SubjectTractionSchema = z.object({
+  githubStars: z.number().int().min(0).optional(),
+  githubStars30dGrowth: z.string().optional(),
+  npmWeeklyDownloads: z.number().int().min(0).optional(),
+  pypiMonthlyDownloads: z.number().int().min(0).optional(),
+  firstRelease: z.string().optional(),
+  lastRelease: z.string().optional(),
+  contributors: z.number().int().min(0).optional(),
+  openIssues: z.number().int().min(0).optional(),
+});
+export type SubjectTraction = z.infer<typeof SubjectTractionSchema>;
 
-export interface RecommendationSubject {
-  name: string;
-  type: SubjectType;
-  url?: string;
-  version?: string;
-  ecosystem?: string; // npm, pip, cargo, etc.
-  license?: string;
-  maturity: SubjectMaturity;
-  traction: SubjectTraction;
-}
+export const RecommendationSubjectSchema = z.object({
+  name: z.string(),
+  type: SubjectTypeSchema,
+  url: z.string().url().optional(),
+  version: z.string().optional(),
+  ecosystem: z.string().optional(),
+  license: z.string().optional(),
+  maturity: SubjectMaturitySchema,
+  traction: SubjectTractionSchema,
+});
+export type RecommendationSubject = z.infer<typeof RecommendationSubjectSchema>;
 
 // ============================================================
 // STABILITY ASSESSMENT (Stability Gate output)
 // ============================================================
 
-export interface CostOfChange {
-  effortDays: string; // e.g., "2-3"
-  regressionRisk: RiskLevel;
-  learningCurve: 'none' | 'low' | 'medium' | 'high';
-  dependenciesAffected: number;
-  testsToUpdate?: string;
-  reversibility: Reversibility;
-}
+export const LearningCurveSchema = z.enum(['none', 'low', 'medium', 'high']);
+export type LearningCurve = z.infer<typeof LearningCurveSchema>;
 
-export interface CostOfNoChange {
-  securityExposure: RiskLevel;
-  maintenanceRisk: RiskLevel;
-  performanceImpact: RiskLevel;
-  deprecationRisk: RiskLevel;
-  complianceRisk: RiskLevel;
-  detail: string;
-}
+export const CostOfChangeSchema = z.object({
+  effortDays: z.string(),
+  regressionRisk: RiskLevelSchema,
+  learningCurve: LearningCurveSchema,
+  dependenciesAffected: z.number().int().min(0),
+  testsToUpdate: z.string().optional(),
+  reversibility: ReversibilitySchema,
+});
+export type CostOfChange = z.infer<typeof CostOfChangeSchema>;
 
-export interface MaturityGate {
-  subjectMaturity: SubjectMaturity;
-  minMaturityForAction: SubjectMaturity;
-  passed: boolean;
-}
+export const CostOfNoChangeSchema = z.object({
+  securityExposure: RiskLevelSchema,
+  maintenanceRisk: RiskLevelSchema,
+  performanceImpact: RiskLevelSchema,
+  deprecationRisk: RiskLevelSchema,
+  complianceRisk: RiskLevelSchema,
+  detail: z.string(),
+});
+export type CostOfNoChange = z.infer<typeof CostOfNoChangeSchema>;
 
-export interface StackHealthInfluence {
-  currentScore: number;
-  thresholdApplied: 'high' | 'medium' | 'low';
-  painPointMatch: boolean;
-  matchedPainPoint?: string;
-}
+export const MaturityGateSchema = z.object({
+  subjectMaturity: SubjectMaturitySchema,
+  minMaturityForAction: SubjectMaturitySchema,
+  passed: z.boolean(),
+});
+export type MaturityGate = z.infer<typeof MaturityGateSchema>;
 
-export interface StabilityAssessment {
-  costOfChange: CostOfChange;
-  costOfNoChange: CostOfNoChange;
-  maturityGate: MaturityGate;
-  stackHealthInfluence: StackHealthInfluence;
-  verdict: StabilityVerdict;
-  verdictReasoning: string; // IFX-tagged reasoning
-  verdictPlain: string; // Plain language for PM
-}
+export const StackHealthInfluenceSchema = z.object({
+  currentScore: z.number().min(0).max(1),
+  thresholdApplied: z.enum(['high', 'medium', 'low']),
+  painPointMatch: z.boolean(),
+  matchedPainPoint: z.string().optional(),
+});
+export type StackHealthInfluence = z.infer<typeof StackHealthInfluenceSchema>;
+
+export const StabilityAssessmentSchema = z.object({
+  costOfChange: CostOfChangeSchema,
+  costOfNoChange: CostOfNoChangeSchema,
+  maturityGate: MaturityGateSchema,
+  stackHealthInfluence: StackHealthInfluenceSchema,
+  verdict: StabilityVerdictSchema,
+  verdictReasoning: z.string(),
+  verdictPlain: z.string(),
+});
+export type StabilityAssessment = z.infer<typeof StabilityAssessmentSchema>;
 
 // ============================================================
 // TECHNICAL OUTPUT (for developers)
 // ============================================================
 
-export interface TechnicalAnalysis {
-  facts: IFXFact[];
-  inferences: IFXInference[];
-  assumptions: IFXAssumption[];
-}
+export const TechnicalAnalysisSchema = z.object({
+  facts: z.array(IFXFactSchema),
+  inferences: z.array(IFXInferenceSchema),
+  assumptions: z.array(IFXAssumptionSchema),
+});
+export type TechnicalAnalysis = z.infer<typeof TechnicalAnalysisSchema>;
 
-export interface CalibratedEffort {
-  rawEstimateDays: string;
-  calibrationApplied: boolean;
-  calibrationFactor?: number;
-  calibratedEstimateDays: string;
-  calibrationNote?: string;
-  complexity: 'trivial' | 'low' | 'medium' | 'high' | 'very_high';
-  breakingChanges: boolean;
-  reversibility: Reversibility;
-  steps: string[];
-}
+export const ComplexitySchema = z.enum(['trivial', 'low', 'medium', 'high', 'very_high']);
+export type Complexity = z.infer<typeof ComplexitySchema>;
 
-export interface ImpactScore {
-  scoreChange: string; // e.g., "+high", "neutral", "-low"
-  detail: string;
-}
+export const CalibratedEffortSchema = z.object({
+  rawEstimateDays: z.string(),
+  calibrationApplied: z.boolean(),
+  calibrationFactor: z.number().optional(),
+  calibratedEstimateDays: z.string(),
+  calibrationNote: z.string().optional(),
+  complexity: ComplexitySchema,
+  breakingChanges: z.boolean(),
+  reversibility: ReversibilitySchema,
+  steps: z.array(z.string()),
+});
+export type CalibratedEffort = z.infer<typeof CalibratedEffortSchema>;
 
-export interface TechnicalImpact {
-  security: ImpactScore;
-  performance: ImpactScore;
-  maintainability: ImpactScore;
-  cost: ImpactScore;
-  risk: {
-    level: RiskLevel;
-    detail: string;
-  };
-}
+export const ImpactScoreSchema = z.object({
+  scoreChange: z.string(),
+  detail: z.string(),
+});
+export type ImpactScore = z.infer<typeof ImpactScoreSchema>;
 
-export interface Tradeoffs {
-  gains: string[];
-  losses: string[];
-}
+export const TechnicalImpactSchema = z.object({
+  security: ImpactScoreSchema,
+  performance: ImpactScoreSchema,
+  maintainability: ImpactScoreSchema,
+  cost: ImpactScoreSchema,
+  risk: z.object({
+    level: RiskLevelSchema,
+    detail: z.string(),
+  }),
+});
+export type TechnicalImpact = z.infer<typeof TechnicalImpactSchema>;
 
-export interface FailureMode {
-  mode: string;
-  probability: 'low' | 'medium' | 'high';
-  mitigation: string;
-}
+export const TradeoffsSchema = z.object({
+  gains: z.array(z.string()),
+  losses: z.array(z.string()),
+});
+export type Tradeoffs = z.infer<typeof TradeoffsSchema>;
 
-export interface TechnicalOutput {
-  analysis: TechnicalAnalysis;
-  effort: CalibratedEffort;
-  impact: TechnicalImpact;
-  tradeoffs: Tradeoffs;
-  failureModes: FailureMode[];
-  limitations: string[];
-}
+export const FailureModeSchema = z.object({
+  mode: z.string(),
+  probability: z.enum(['low', 'medium', 'high']),
+  mitigation: z.string(),
+});
+export type FailureMode = z.infer<typeof FailureModeSchema>;
+
+export const TechnicalOutputSchema = z.object({
+  analysis: TechnicalAnalysisSchema,
+  effort: CalibratedEffortSchema,
+  impact: TechnicalImpactSchema,
+  tradeoffs: TradeoffsSchema,
+  failureModes: z.array(FailureModeSchema),
+  limitations: z.array(z.string()),
+});
+export type TechnicalOutput = z.infer<typeof TechnicalOutputSchema>;
 
 // ============================================================
 // HUMAN-FRIENDLY OUTPUT (for PM, stakeholders)
 // ============================================================
 
-export interface ClientTalkingPoint {
-  point: string;
-  answer: string;
-}
+export const ClientTalkingPointSchema = z.object({
+  point: z.string(),
+  answer: z.string(),
+});
+export type ClientTalkingPoint = z.infer<typeof ClientTalkingPointSchema>;
 
-export interface HumanFriendlyImpact {
-  security: string;
-  costo: string;
-  rischio: string;
-  urgenza: string;
-}
+export const HumanFriendlyImpactSchema = z.object({
+  security: z.string(),
+  costo: z.string(),
+  rischio: z.string(),
+  urgenza: z.string(),
+});
+export type HumanFriendlyImpact = z.infer<typeof HumanFriendlyImpactSchema>;
 
-export interface HumanFriendlyOutput {
-  title: string;
-  oneLiner: string;
-  summary: string;
-  whyNow: string;
-  clientTalkingPoints: ClientTalkingPoint[];
-  impactSummary: HumanFriendlyImpact;
-}
+export const HumanFriendlyOutputSchema = z.object({
+  title: z.string(),
+  oneLiner: z.string(),
+  summary: z.string(),
+  whyNow: z.string(),
+  clientTalkingPoints: z.array(ClientTalkingPointSchema),
+  impactSummary: HumanFriendlyImpactSchema,
+});
+export type HumanFriendlyOutput = z.infer<typeof HumanFriendlyOutputSchema>;
 
 // ============================================================
 // COMPLETE RECOMMENDATION
 // ============================================================
 
-export interface Recommendation {
-  id: string;
-  ifxTraceId: IFXTraceId;
-  projectId: string;
-  feedItemId?: string;
-  generatedAt: string;
-  modelUsed: string;
+export const RecommendationSchema = z.object({
+  id: z.string(),
+  ifxTraceId: IFXTraceIdSchema,
+  projectId: z.string(),
+  feedItemId: z.string().optional(),
+  generatedAt: z.string().datetime(),
+  modelUsed: z.string(),
 
   // Type and classification
-  type: RecommendationType;
-  action: RecommendationAction;
-  priority: RecommendationPriority;
-  confidence: number;
+  type: RecommendationTypeSchema,
+  action: RecommendationActionSchema,
+  priority: RecommendationPrioritySchema,
+  confidence: z.number().min(0).max(1),
 
   // Subject
-  subject: RecommendationSubject;
+  subject: RecommendationSubjectSchema,
 
   // What it affects
-  replaces?: string;
-  complements?: string;
-  enables?: string;
+  replaces: z.string().optional(),
+  complements: z.string().optional(),
+  enables: z.string().optional(),
 
   // Role visibility
-  roleVisibility: TeamRole[];
+  roleVisibility: z.array(TeamRoleSchema),
 
   // Assessments
-  stabilityAssessment: StabilityAssessment;
-  technical: TechnicalOutput;
-  humanFriendly: HumanFriendlyOutput;
-  kqr: KQRQualification;
+  stabilityAssessment: StabilityAssessmentSchema,
+  technical: TechnicalOutputSchema,
+  humanFriendly: HumanFriendlyOutputSchema,
+  kqr: KQRQualificationSchema,
 
   // Delivery state
-  isDelivered: boolean;
-  deliveredAt?: string;
-  deliveryChannel?: string;
-}
+  isDelivered: z.boolean(),
+  deliveredAt: z.string().datetime().optional(),
+  deliveryChannel: z.string().optional(),
+});
+export type Recommendation = z.infer<typeof RecommendationSchema>;
 
 // ============================================================
 // BREAKING CHANGE ALERT
 // ============================================================
 
-export interface BreakingChangeAlert {
-  id: string;
-  ifxTraceId: IFXTraceId;
-  projectId: string;
-  generatedAt: string;
-  type: 'breaking_change_alert';
+export const BreakingChangeAlertSubjectSchema = z.object({
+  name: z.string(),
+  currentVersion: z.string(),
+  newVersion: z.string(),
+  url: z.string().url().optional(),
+});
 
-  alertType: BreakingChangeAlertType;
+export const BreakingChangeAlertSchema = z.object({
+  id: z.string(),
+  ifxTraceId: IFXTraceIdSchema,
+  projectId: z.string(),
+  generatedAt: z.string().datetime(),
+  type: z.literal('breaking_change_alert'),
 
-  subject: {
-    name: string;
-    currentVersion: string;
-    newVersion: string;
-    url?: string;
-  };
+  alertType: BreakingChangeAlertTypeSchema,
 
-  severity: RecommendationPriority;
+  subject: BreakingChangeAlertSubjectSchema,
 
-  technicalSummary: string; // IFX-tagged
-  humanSummary: string;
+  severity: RecommendationPrioritySchema,
 
-  actionRequired: ActionRequired;
-  actionDetail: string;
+  technicalSummary: z.string(),
+  humanSummary: z.string(),
 
-  affectedTeamRoles: TeamRole[];
-}
+  actionRequired: ActionRequiredSchema,
+  actionDetail: z.string(),
+
+  affectedTeamRoles: z.array(TeamRoleSchema),
+});
+export type BreakingChangeAlert = z.infer<typeof BreakingChangeAlertSchema>;
 
 // ============================================================
 // FEEDBACK
 // ============================================================
 
-export interface CostTrackingFeedback {
-  actualDays?: number;
-  actualComplexity?: 'trivial' | 'low' | 'medium' | 'high' | 'very_high';
-  notes?: string;
-  unexpectedIssues?: string;
-}
+export const CostTrackingFeedbackSchema = z.object({
+  actualDays: z.number().min(0).optional(),
+  actualComplexity: ComplexitySchema.optional(),
+  notes: z.string().optional(),
+  unexpectedIssues: z.string().optional(),
+});
+export type CostTrackingFeedback = z.infer<typeof CostTrackingFeedbackSchema>;
 
-export interface RecommendationFeedback {
-  id: string;
-  recommendationId: string;
-  status: FeedbackStatus;
-  userNotes?: string;
-  submittedBy?: string;
-  submittedAt?: string;
-  costTracking?: CostTrackingFeedback;
-  adoptedAt?: string;
-  adoptionOutcome?: Record<string, unknown>;
-}
+export const RecommendationFeedbackSchema = z.object({
+  id: z.string(),
+  recommendationId: z.string(),
+  status: FeedbackStatusSchema,
+  userNotes: z.string().optional(),
+  submittedBy: z.string().optional(),
+  submittedAt: z.string().datetime().optional(),
+  costTracking: CostTrackingFeedbackSchema.optional(),
+  adoptedAt: z.string().datetime().optional(),
+  adoptionOutcome: z.record(z.string(), z.unknown()).optional(),
+});
+export type RecommendationFeedback = z.infer<typeof RecommendationFeedbackSchema>;
 
 // ============================================================
 // DATABASE ENTITY TYPES
 // ============================================================
 
-export interface RecommendationEntity {
-  id: string;
-  project_id: string;
-  feed_item_id: string | null;
-  ifx_trace_id: string;
-  model_used: string;
-  generated_at: string;
-  type: RecommendationType;
-  action: RecommendationAction;
-  priority: RecommendationPriority;
-  confidence: number;
-  subject: RecommendationSubject;
-  replaces: string | null;
-  complements: string | null;
-  enables: string | null;
-  role_visibility: TeamRole[];
-  stability_assessment: StabilityAssessment;
-  technical: TechnicalOutput;
-  human_friendly: HumanFriendlyOutput;
-  kqr: KQRQualification;
-  is_delivered: boolean;
-  delivered_at: string | null;
-  delivery_channel: string | null;
-  alert_type: BreakingChangeAlertType | null;
-  alert_severity: RecommendationPriority | null;
-  action_required: string | null;
-  created_at: string;
-}
+export const RecommendationEntitySchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  feed_item_id: z.string().nullable(),
+  ifx_trace_id: z.string(),
+  model_used: z.string(),
+  generated_at: z.string().datetime(),
+  type: RecommendationTypeSchema,
+  action: RecommendationActionSchema,
+  priority: RecommendationPrioritySchema,
+  confidence: z.number().min(0).max(1),
+  subject: RecommendationSubjectSchema,
+  replaces: z.string().nullable(),
+  complements: z.string().nullable(),
+  enables: z.string().nullable(),
+  role_visibility: z.array(TeamRoleSchema),
+  stability_assessment: StabilityAssessmentSchema,
+  technical: TechnicalOutputSchema,
+  human_friendly: HumanFriendlyOutputSchema,
+  kqr: KQRQualificationSchema,
+  is_delivered: z.boolean(),
+  delivered_at: z.string().datetime().nullable(),
+  delivery_channel: z.string().nullable(),
+  alert_type: BreakingChangeAlertTypeSchema.nullable(),
+  alert_severity: RecommendationPrioritySchema.nullable(),
+  action_required: z.string().nullable(),
+  created_at: z.string().datetime(),
+});
+export type RecommendationEntity = z.infer<typeof RecommendationEntitySchema>;
 
-export interface RecommendationFeedbackEntity {
-  id: string;
-  recommendation_id: string;
-  status: FeedbackStatus;
-  user_notes: string | null;
-  submitted_by: string | null;
-  submitted_at: string | null;
-  actual_days: number | null;
-  actual_complexity: string | null;
-  unexpected_issues: string | null;
-  adoption_notes: string | null;
-  adopted_at: string | null;
-  adoption_outcome: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-}
+export const RecommendationFeedbackEntitySchema = z.object({
+  id: z.string(),
+  recommendation_id: z.string(),
+  status: FeedbackStatusSchema,
+  user_notes: z.string().nullable(),
+  submitted_by: z.string().nullable(),
+  submitted_at: z.string().datetime().nullable(),
+  actual_days: z.number().nullable(),
+  actual_complexity: z.string().nullable(),
+  unexpected_issues: z.string().nullable(),
+  adoption_notes: z.string().nullable(),
+  adopted_at: z.string().datetime().nullable(),
+  adoption_outcome: z.record(z.string(), z.unknown()).nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+export type RecommendationFeedbackEntity = z.infer<typeof RecommendationFeedbackEntitySchema>;

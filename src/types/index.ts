@@ -1,24 +1,62 @@
 /**
- * TechScout — Type Exports
+ * TechScout — Type Exports v1.1
  *
- * Re-exports all types from the types module.
+ * Re-exports all types and Zod schemas from the types module.
  * Import from '@/types' or './types' in other modules.
+ *
+ * Types are inferred from Zod schemas for runtime validation.
  */
 
+// ============================================================
 // IFX (Information Flow eXplicitness)
+// ============================================================
+export {
+  // Zod Schemas
+  IFXTagTypeSchema,
+  SourceReliabilitySchema,
+  IFXTraceIdSchema,
+  IFXTaggedClaimSchema,
+  IFXFactSchema,
+  IFXInferenceSchema,
+  IFXAssumptionSchema,
+  IFXClaimSchema,
+  IFXTraceSummarySchema,
+  IFXGovernanceSourceSchema,
+  IFXGovernanceSchema,
+  ClaimSummarySchema,
+} from './ifx';
+
 export type {
   IFXTagType,
+  SourceReliability,
+  IFXTraceId,
   IFXTaggedClaim,
   IFXFact,
   IFXInference,
   IFXAssumption,
   IFXClaim,
-  IFXTraceId,
   IFXTraceSummary,
+  IFXGovernanceSource,
   IFXGovernance,
+  ClaimSummary,
 } from './ifx';
 
+// ============================================================
 // KQR (Knowledge Qualification & Reliability)
+// ============================================================
+export {
+  // Zod Schemas
+  KQRReliabilitySchema,
+  KQRSourceTypeSchema,
+  KQRSourceSchema,
+  KQRCrossValidationSchema,
+  KQRConfidenceBreakdownSchema,
+  KQRQualificationSchema,
+  // Constants
+  KQR_RELIABILITY_SCORES,
+  KQR_SOURCE_TYPE_WEIGHTS,
+} from './kqr';
+
 export type {
   KQRReliability,
   KQRSourceType,
@@ -27,9 +65,67 @@ export type {
   KQRConfidenceBreakdown,
   KQRQualification,
 } from './kqr';
-export { KQR_RELIABILITY_SCORES, KQR_SOURCE_TYPE_WEIGHTS } from './kqr';
 
+// ============================================================
 // Project Profile
+// ============================================================
+export {
+  // Zod Schemas - Enums
+  ProjectPhaseSchema,
+  TeamRoleSchema,
+  ScoutingFrequencySchema,
+  SourceProviderSchema,
+  ConnectionTypeSchema,
+  LanguageRoleSchema,
+  FrameworkCategorySchema,
+  DependencyEcosystemSchema,
+  CFSeveritySchema,
+  BreakingChangeAlertTypeSchema,
+  HealthTrendSchema,
+  // Zod Schemas - Types
+  TeamMemberSchema,
+  NotificationChannelSchema,
+  BreakingChangesConfigSchema,
+  ExportConfigSchema,
+  AgentSafetyConfigSchema,
+  AgentConfigSchema,
+  ScoutingConfigSchema,
+  GitHubRepoSchema,
+  GitLabRepoSchema,
+  SourceConnectionSchema,
+  ProjectSourceSchema,
+  LanguageInfoSchema,
+  FrameworkInfoSchema,
+  DatabaseInfoSchema,
+  HostingInfoSchema,
+  InfrastructureInfoSchema,
+  KeyDependencySchema,
+  EcosystemDependenciesSchema,
+  AllDependenciesSchema,
+  ProjectStackSchema,
+  HealthComponentScoreSchema,
+  StackHealthComponentsSchema,
+  StackHealthSchema,
+  ProjectManifestSchema,
+  CFFindingSchema,
+  CFScanSummarySchema,
+  CFFindingsSchema,
+  AdoptionRecordSchema,
+  CostCalibrationSchema,
+  CostTrackingSchema,
+  ProjectSchema,
+  ProjectProfileSchema,
+  PartialProjectProfileSchema,
+  // Database Entity Schemas
+  ProjectEntitySchema,
+  ProjectSourceEntitySchema,
+  ProjectTeamEntitySchema,
+  ProjectStackEntitySchema,
+  ProjectManifestEntitySchema,
+  CFFindingEntitySchema,
+  StackHealthEntitySchema,
+} from './project-profile';
+
 export type {
   // Enums
   ProjectPhase,
@@ -42,6 +138,7 @@ export type {
   DependencyEcosystem,
   CFSeverity,
   BreakingChangeAlertType,
+  HealthTrend,
   // Team
   TeamMember,
   NotificationChannel,
@@ -94,7 +191,25 @@ export type {
   StackHealthEntity,
 } from './project-profile';
 
+// ============================================================
 // Feed Items
+// ============================================================
+export {
+  // Zod Schemas
+  FeedSourceTierSchema,
+  FeedSourceNameSchema,
+  FeedSourceConfigSchema,
+  TractionSignalsSchema,
+  FeedSourceTypeSchema,
+  FeedItemSchema,
+  RawFeedItemSchema,
+  FeedItemEntitySchema,
+  FeedFetchResultSchema,
+  FeedBatchResultSchema,
+  PreFilterMatchSchema,
+  PreFilterBatchResultSchema,
+} from './feed-item';
+
 export type {
   // Configuration
   FeedSourceTier,
@@ -103,6 +218,7 @@ export type {
   // Traction
   TractionSignals,
   // Feed Item
+  FeedSourceType,
   FeedItem,
   RawFeedItem,
   FeedItemEntity,
@@ -114,7 +230,50 @@ export type {
   PreFilterBatchResult,
 } from './feed-item';
 
+// ============================================================
 // Recommendations
+// ============================================================
+export {
+  // Zod Schemas - Enums
+  RecommendationTypeSchema,
+  RecommendationActionSchema,
+  RecommendationPrioritySchema,
+  SubjectTypeSchema,
+  SubjectMaturitySchema,
+  RiskLevelSchema,
+  ReversibilitySchema,
+  StabilityVerdictSchema,
+  FeedbackStatusSchema,
+  ActionRequiredSchema,
+  LearningCurveSchema,
+  ComplexitySchema,
+  // Zod Schemas - Types
+  SubjectTractionSchema,
+  RecommendationSubjectSchema,
+  CostOfChangeSchema,
+  CostOfNoChangeSchema,
+  MaturityGateSchema,
+  StackHealthInfluenceSchema,
+  StabilityAssessmentSchema,
+  TechnicalAnalysisSchema,
+  CalibratedEffortSchema,
+  ImpactScoreSchema,
+  TechnicalImpactSchema,
+  TradeoffsSchema,
+  FailureModeSchema,
+  TechnicalOutputSchema,
+  ClientTalkingPointSchema,
+  HumanFriendlyImpactSchema,
+  HumanFriendlyOutputSchema,
+  RecommendationSchema,
+  BreakingChangeAlertSubjectSchema,
+  BreakingChangeAlertSchema,
+  CostTrackingFeedbackSchema,
+  RecommendationFeedbackSchema,
+  RecommendationEntitySchema,
+  RecommendationFeedbackEntitySchema,
+} from './recommendation';
+
 export type {
   // Enums
   RecommendationType,
@@ -127,6 +286,8 @@ export type {
   StabilityVerdict,
   FeedbackStatus,
   ActionRequired,
+  LearningCurve,
+  Complexity,
   // Subject
   SubjectTraction,
   RecommendationSubject,
@@ -159,7 +320,58 @@ export type {
   RecommendationFeedbackEntity,
 } from './recommendation';
 
+// ============================================================
 // Migration Agent
+// ============================================================
+export {
+  // Zod Schemas - Enums
+  AgentModeSchema,
+  GitProviderSchema,
+  MigrationStatusSchema,
+  ReviewStatusSchema,
+  PreflightCheckTypeSchema,
+  StepRiskSchema,
+  SafetyStopReasonSchema,
+  AuditActionSchema,
+  ActorTypeSchema,
+  ObservationTypeSchema,
+  // Zod Schemas - Types
+  AgentGitConfigSchema,
+  AgentSafetyLimitsSchema,
+  AgentNotificationConfigSchema,
+  AgentConfigurationSchema,
+  PreflightCheckSchema,
+  PreflightResultSchema,
+  BackupInfoSchema,
+  PlanStepSchema,
+  MigrationPlanSchema,
+  StepExecutionSchema,
+  SafetyCheckSchema,
+  AmbiguityLogEntrySchema,
+  ClaudeCodeSessionSchema,
+  ExecutionResultSchema,
+  TestSuiteResultSchema,
+  LintResultSchema,
+  TypeCheckResultSchema,
+  TestingResultSchema,
+  DiffStatsSchema,
+  FileChangeSchema,
+  CFAddressedSchema,
+  ObservationSchema,
+  EffortComparisonSchema,
+  IFXTraceInfoSchema,
+  MigrationReportSchema,
+  PullRequestSchema,
+  HumanReviewSchema,
+  PostMergeUpdatesSchema,
+  PostMergeInfoSchema,
+  SafetyStopSchema,
+  MigrationJobSchema,
+  AuditLogEntrySchema,
+  MigrationJobEntitySchema,
+  AuditLogEntitySchema,
+} from './agent';
+
 export type {
   // Configuration
   AgentMode,
