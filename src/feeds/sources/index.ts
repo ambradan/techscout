@@ -10,6 +10,7 @@ import './hacker-news';
 import './github-trending';
 import './npm-packages';
 import './product-hunt';
+import './yc-launches';
 
 // Re-export the base for convenience
 export * from '../base';

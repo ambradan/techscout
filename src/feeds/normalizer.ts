@@ -64,6 +64,48 @@ function normalizeHackerNews(raw: RawFeedItem): FeedItem | null {
   };
 }
 
+function normalizeYCLaunch(raw: RawFeedItem): FeedItem | null {
+  const data = raw.rawData as HNStoryData;
+  if (!data || !data.title) return null;
+
+  // Extract YC batch from title if present (e.g., "MyApp (YC S24)")
+  const ycBatchMatch = data.title.match(/\(YC\s*([SWFH]\d{2})\)/i);
+  const ycBatch = ycBatchMatch ? ycBatchMatch[1].toUpperCase() : undefined;
+
+  // Clean title by removing "Launch HN:" prefix
+  const cleanTitle = data.title
+    .replace(/^launch\s*hn[:\s–-]+\s*/i, '')
+    .trim();
+
+  const categories = ['startup', 'launch', ...detectCategories(cleanTitle + ' ' + (data.url || ''))];
+  const technologies = detectTechnologies(cleanTitle + ' ' + (data.url || '') + ' ' + (data.text || ''));
+
+  return {
+    id: '',
+    sourceName: raw.sourceName,
+    sourceTier: 'tier1_high_signal',
+    sourceReliability: 'high',
+    externalId: `yc:${data.id}`,
+    title: cleanTitle,
+    url: data.url || `https://news.ycombinator.com/item?id=${data.id}`,
+    description: data.text || undefined,
+    contentSummary: ycBatch ? `YC ${ycBatch} Launch` : 'Y Combinator Launch',
+    publishedAt: new Date(data.time * 1000).toISOString(),
+    fetchedAt: raw.fetchedAt,
+    categories: [...new Set(categories)],
+    technologies,
+    languageEcosystems: detectEcosystems(technologies),
+    traction: {
+      hnPoints: data.score,
+      hnComments: data.descendants || 0,
+      points: data.score,
+      comments: data.descendants || 0,
+    },
+    isProcessed: false,
+    contentHash: generateContentHash(data.title, data.url || ''),
+  };
+}
+
 interface TrendingRepoData {
   rank: number;
   name: string;
@@ -350,8 +392,8 @@ const NORMALIZERS: Record<FeedSourceName, (raw: RawFeedItem) => FeedItem | null>
   github_releases: normalizeGitHubRelease,
   npm_new_packages: normalizeNpmPackage,
   product_hunt: normalizeProductHunt,
-  // Placeholder for other sources
-  y_combinator_launches: (raw) => null, // TODO
+  // Y Combinator Launches (same format as HN, but with YC metadata)
+  y_combinator_launches: normalizeYCLaunch,
   y_combinator_companies: (raw) => null, // TODO
   techcrunch: (raw) => null, // TODO
   pypi_new_packages: (raw) => null, // TODO
