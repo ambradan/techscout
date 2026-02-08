@@ -184,7 +184,35 @@ export function calculateInferenceQuality(claims: IFXClaim[]): number {
 }
 
 /**
- * Calculate the overall confidence score.
+ * Calculate confidence from pre-computed scores.
+ *
+ * Formula: source_reliability × factual_basis × inference_quality × (1 - assumption_risk)
+ *
+ * @param sourceReliability - Weighted average of source reliabilities (0-1)
+ * @param factualBasis - Proportion of facts in claims (0-1)
+ * @param inferenceQuality - Average confidence of inferences (0-1)
+ * @param assumptionRisk - Risk from unvalidated assumptions (0-1)
+ */
+export function calculateConfidenceSimple(
+  sourceReliability: number,
+  factualBasis: number,
+  inferenceQuality: number,
+  assumptionRisk: number
+): number {
+  // Validate inputs
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
+  const sr = clamp(sourceReliability);
+  const fb = clamp(factualBasis);
+  const iq = clamp(inferenceQuality);
+  const ar = clamp(assumptionRisk);
+
+  const confidence = sr * fb * iq * (1 - ar);
+  return Math.round(confidence * 100) / 100;
+}
+
+/**
+ * Calculate the overall confidence score from sources and claims.
  *
  * Formula: weighted_avg(source_reliability) × factual_basis × inference_quality × (1 - assumption_risk)
  */
@@ -235,7 +263,7 @@ export function generateQualification(
 
   // Generate qualification statement
   const highReliabilitySources = sources.filter(s => s.reliability === 'high' || s.reliability === 'very_high').length;
-  const statement = generateQualificationStatement(
+  const statement = generateQualificationStatementInternal(
     sources.length,
     highReliabilitySources,
     confidence,
@@ -253,8 +281,9 @@ export function generateQualification(
 
 /**
  * Generate a human-readable qualification statement.
+ * Internal version with full breakdown parameter.
  */
-function generateQualificationStatement(
+function generateQualificationStatementInternal(
   totalSources: number,
   highReliabilitySources: number,
   confidence: number,
@@ -281,6 +310,39 @@ function generateQualificationStatement(
   }
 
   return parts.join(' ');
+}
+
+/**
+ * Generate a human-readable qualification statement.
+ *
+ * @param confidence - Overall confidence score (0-1)
+ * @param sources - Array of KQR sources used
+ */
+export function generateQualificationStatement(
+  confidence: number,
+  sources: KQRSource[]
+): string {
+  const highReliabilitySources = sources.filter(
+    s => s.reliability === 'high' || s.reliability === 'very_high'
+  ).length;
+
+  // Calculate breakdown for uncertainty detection
+  const avgWeight = sources.length > 0
+    ? sources.reduce((sum, s) => sum + s.weight, 0) / sources.length
+    : 0.5;
+
+  const breakdown: KQRConfidenceBreakdown = {
+    factualBasis: Math.min(1, avgWeight * 1.2), // Estimate
+    inferenceQuality: Math.min(1, confidence * 1.1), // Estimate
+    assumptionRisk: Math.max(0, 1 - confidence), // Inverse of confidence
+  };
+
+  return generateQualificationStatementInternal(
+    sources.length,
+    highReliabilitySources,
+    confidence,
+    breakdown
+  );
 }
 
 // ============================================================

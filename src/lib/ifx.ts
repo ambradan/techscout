@@ -287,3 +287,103 @@ export function calculateAssumptionRisk(claims: IFXClaim[]): number {
   // Risk increases with more unvalidated assumptions relative to facts
   return Math.min(1, unvalidatedAssumptions / Math.max(1, facts));
 }
+
+// ============================================================
+// TRACE VALIDATION
+// ============================================================
+
+/**
+ * Validation result for a trace.
+ */
+export interface TraceValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  stats: {
+    facts: number;
+    inferences: number;
+    assumptions: number;
+  };
+}
+
+/**
+ * Validate a collection of claims for IFX compliance.
+ *
+ * Requirements:
+ * - At least 1 FACT must be present
+ * - Every INFERENCE must have a non-empty derivedFrom array
+ * - derivedFrom references should exist in the claims (warning if not)
+ *
+ * @param claims - Array of IFX claims to validate
+ */
+export function validateTrace(claims: IFXClaim[]): TraceValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Separate claims by type
+  const facts = claims.filter(c => c.ifxTag === 'FACT');
+  const inferences = claims.filter(c => c.ifxTag === 'INFERENCE') as IFXInference[];
+  const assumptions = claims.filter(c => c.ifxTag === 'ASSUMPTION');
+
+  // Rule 1: At least 1 FACT required
+  if (facts.length === 0) {
+    errors.push('At least one FACT is required. Every trace must be grounded in verifiable facts.');
+  }
+
+  // Rule 2: Every INFERENCE must have derivedFrom
+  for (let i = 0; i < inferences.length; i++) {
+    const inference = inferences[i];
+    if (!inference.derivedFrom || inference.derivedFrom.length === 0) {
+      errors.push(
+        `INFERENCE #${i + 1} missing derivedFrom: "${inference.claim.substring(0, 50)}..."`
+      );
+    }
+  }
+
+  // Rule 3: Check for low-confidence inferences (warning)
+  const lowConfidenceInferences = inferences.filter(i => i.confidence < 0.5);
+  if (lowConfidenceInferences.length > 0) {
+    warnings.push(
+      `${lowConfidenceInferences.length} inference(s) have confidence below 0.5. Consider validating or marking as assumptions.`
+    );
+  }
+
+  // Rule 4: Check for many unvalidated assumptions (warning)
+  const unvalidatedAssumptions = assumptions.filter(
+    a => (a as IFXAssumption).validated === undefined
+  );
+  if (unvalidatedAssumptions.length > 3) {
+    warnings.push(
+      `${unvalidatedAssumptions.length} unvalidated assumptions. Consider validating critical assumptions before proceeding.`
+    );
+  }
+
+  // Rule 5: Check assumption-to-fact ratio (warning)
+  if (facts.length > 0 && assumptions.length > facts.length * 2) {
+    warnings.push(
+      `High assumption-to-fact ratio (${assumptions.length}:${facts.length}). Consider gathering more facts.`
+    );
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    stats: {
+      facts: facts.length,
+      inferences: inferences.length,
+      assumptions: assumptions.length,
+    },
+  };
+}
+
+/**
+ * Validate and throw if trace is invalid.
+ * Use this when you need to enforce valid traces.
+ */
+export function assertValidTrace(claims: IFXClaim[]): void {
+  const result = validateTrace(claims);
+  if (!result.valid) {
+    throw new Error(`Invalid IFX trace: ${result.errors.join('; ')}`);
+  }
+}
