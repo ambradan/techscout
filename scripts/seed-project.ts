@@ -237,7 +237,7 @@ const SAMPLE_STACK_HEALTH = {
 const SAMPLE_FEED_ITEMS = [
   {
     sourceName: 'Hacker News',
-    sourceTier: 'tier2',
+    sourceTier: 'tier2_curated',
     sourceReliability: 'high',
     externalId: 'hn-12345678',
     title: 'BetterAuth: A modern authentication library for TypeScript',
@@ -256,7 +256,7 @@ const SAMPLE_FEED_ITEMS = [
   },
   {
     sourceName: 'GitHub Trending',
-    sourceTier: 'tier1',
+    sourceTier: 'tier1_high_signal',
     sourceReliability: 'high',
     externalId: 'gh-better-auth/better-auth',
     title: 'better-auth/better-auth',
@@ -285,7 +285,7 @@ const createBetterAuthRecommendation = (projectId: string, feedItemId: string) =
   feedItemId,
   ifxTraceId: generateRecommendationTraceId(),
   modelUsed: 'claude-sonnet-4-5-20250929',
-  type: 'technology_replacement',
+  type: 'recommendation',
   action: 'REPLACE_EXISTING',
   priority: 'high',
   confidence: 0.78,
@@ -298,7 +298,7 @@ const createBetterAuthRecommendation = (projectId: string, feedItemId: string) =
   replaces: 'jsonwebtoken, custom auth logic in auth-middleware.ts',
   complements: undefined,
   enables: 'automatic JWT expiry, RBAC, OAuth providers',
-  roleVisibility: ['developer_fullstack', 'tech_lead', 'security'],
+  roleVisibility: ['developer_fullstack', 'developer_backend', 'pm'],
   stabilityAssessment: {
     costOfChange: 0.45,
     costOfNoChange: 0.65,
@@ -429,11 +429,15 @@ async function seed() {
 
     // 2. Create team members
     logger.info('Creating team members...');
-    for (const member of SAMPLE_TEAM) {
-      const userId = `user-${member.name.toLowerCase()}-${Date.now()}`;
+    const teamUserIds = [
+      'bbbbbbbb-1111-1111-1111-111111111111', // Ambra
+      'cccccccc-2222-2222-2222-222222222222', // Marco
+    ];
+    for (let i = 0; i < SAMPLE_TEAM.length; i++) {
+      const member = SAMPLE_TEAM[i];
       await createTeamMember({
         projectId: project.id,
-        userId,
+        userId: teamUserIds[i],
         ...member,
       });
       logger.info('Team member created', { name: member.name, role: member.role });
@@ -509,8 +513,13 @@ async function seed() {
     });
     logger.info('Governance metadata created');
 
-    // 9. Create feed items
+    // 9. Create feed items (delete existing first for idempotency)
     logger.info('Creating feed items...');
+    const admin = getAdminClient();
+    // Delete existing feed items with same external_ids
+    for (const feedItem of SAMPLE_FEED_ITEMS) {
+      await admin.from('feed_items').delete().eq('external_id', feedItem.externalId);
+    }
     const createdFeedItems: { id: string; title: string }[] = [];
     for (const feedItem of SAMPLE_FEED_ITEMS) {
       const created = await createFeedItem(feedItem);

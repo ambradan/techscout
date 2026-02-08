@@ -38,7 +38,8 @@ export interface CreateProjectInput {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<ProjectEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('projects')
     .insert({
       owner_id: input.ownerId,
@@ -72,7 +73,8 @@ export async function getProjectById(id: string): Promise<ProjectEntity | null> 
 }
 
 export async function getProjectBySlug(ownerId: string, slug: string): Promise<ProjectEntity | null> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('projects')
     .select('*')
     .eq('owner_id', ownerId)
@@ -120,7 +122,8 @@ export async function updateProject(id: string, updates: Partial<CreateProjectIn
 
 export async function deleteProject(id: string): Promise<void> {
   logger.info('Deleting project', { id });
-  const { error } = await supabase
+  const admin = getAdminClient();
+  const { error } = await admin
     .from('projects')
     .delete()
     .eq('id', id);
@@ -146,7 +149,8 @@ export interface CreateProjectSourceInput {
 }
 
 export async function createProjectSource(input: CreateProjectSourceInput): Promise<ProjectSourceEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('project_sources')
     .insert({
       project_id: input.projectId,
@@ -201,7 +205,8 @@ export interface CreateTeamMemberInput {
 }
 
 export async function createTeamMember(input: CreateTeamMemberInput): Promise<ProjectTeamEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('project_team')
     .insert({
       project_id: input.projectId,
@@ -244,7 +249,8 @@ export interface UpsertProjectStackInput {
 }
 
 export async function upsertProjectStack(input: UpsertProjectStackInput): Promise<ProjectStackEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('project_stack')
     .upsert({
       project_id: input.projectId,
@@ -298,7 +304,8 @@ export interface UpsertProjectManifestInput {
 }
 
 export async function upsertProjectManifest(input: UpsertProjectManifestInput): Promise<ProjectManifestEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('project_manifest')
     .upsert({
       project_id: input.projectId,
@@ -350,7 +357,8 @@ export interface CreateCFindingInput {
 }
 
 export async function createCFFinding(input: CreateCFindingInput): Promise<CFFindingEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('cf_findings')
     .insert({
       project_id: input.projectId,
@@ -408,7 +416,8 @@ export interface UpsertStackHealthInput {
 }
 
 export async function upsertStackHealth(input: UpsertStackHealthInput): Promise<StackHealthEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('stack_health')
     .upsert({
       project_id: input.projectId,
@@ -635,7 +644,8 @@ export interface CreateRecommendationInput {
 }
 
 export async function createRecommendation(input: CreateRecommendationInput): Promise<RecommendationEntity> {
-  const { data, error } = await supabase
+  const admin = getAdminClient();
+  const { data, error } = await admin
     .from('recommendations')
     .insert({
       project_id: input.projectId,
@@ -973,7 +983,8 @@ export interface UpsertGovernanceInput {
 }
 
 export async function upsertGovernanceMetadata(input: UpsertGovernanceInput): Promise<void> {
-  const { error } = await supabase
+  const admin = getAdminClient();
+  const { error } = await admin
     .from('governance_metadata')
     .upsert({
       project_id: input.projectId,
