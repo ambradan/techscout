@@ -1,0 +1,43 @@
+# ============================================================
+# TechScout — Feed Sources Configuration v1.0
+# ============================================================
+# Tutte le fonti di intelligence tech.
+# Ogni fonte ha: endpoint, metodo, frequenza, KQR reliability.
+# Vedi v1.0 completo — nessuna modifica in v1.1
+# ============================================================
+
+# [CONTENUTO IDENTICO AL v1.0 GIA' CONSEGNATO]
+# File completo disponibile nella delivery precedente.
+# Nessuna modifica necessaria per v1.1.
+# Le modifiche v1.1 impattano solo:
+#   - project_profile.schema.yaml
+#   - recommendation.schema.yaml  
+#   - ARCHITECTURE.md
+
+# Per reference rapido, le fonti sono:
+#
+# TIER 1 — HIGH SIGNAL:
+#   - Hacker News (top + show)
+#   - Y Combinator (launches + companies)
+#   - TechCrunch RSS
+#   - Product Hunt GraphQL
+#   - GitHub Trending (OSS Insight)
+#   - GitHub Releases (dipendenze progetto)
+#   - npm/PyPI new packages
+#
+# TIER 2 — CURATED:
+#   - ThoughtWorks Technology Radar
+#   - JavaScript Weekly / Python Weekly
+#   - Changelog
+#   - TLDR Newsletter
+#   - a16z Blog / Sequoia Blog
+#   - Stratechery / The Information
+#   - Lobste.rs
+#
+# TIER 3 — COMMUNITY:
+#   - Reddit (programming, webdev, node, python)
+#   - DEV.to
+#
+# CONDITIONAL (attivati per stack):
+#   - This Week in Rust / Go Weekly / React Newsletter
+#   - Supabase Blog (se usi Supabase)

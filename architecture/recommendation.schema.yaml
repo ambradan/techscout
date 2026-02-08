@@ -1,0 +1,427 @@
+# ============================================================
+# TechScout — Recommendation Output Schema v1.1
+# ============================================================
+# Ogni raccomandazione DEVE essere conforme a questo schema.
+# Dual-output: tecnico (dev) + human-friendly (PM/stakeholder).
+# Governato da IFX/KQR.
+#
+# CHANGELOG v1.1:
+#   - Aggiunto stability_assessment (Stability Gate)
+#   - Aggiunto type: breaking_change_alert
+#   - Aggiunto cost_tracking nella sezione feedback
+#   - Aggiunto role_visibility per delivery filtrata
+#   - Aggiunto calibrated_effort con adjustment da storico
+# ============================================================
+
+recommendation:
+  # --- IDENTITY & TRACE ---
+  id: "rec-uuid-v4"
+  ifx_trace_id: "IFX-2026-0208-001"
+  project_id: "uuid-del-progetto"
+  generated_at: "2026-02-08T10:30:00Z"
+  model_used: "claude-sonnet-4-5"
+
+  # --- TYPE (v1.1) ---
+  # Distingue tra raccomandazione normale e alert urgente
+  type: "recommendation"                 # recommendation | breaking_change_alert
+  # breaking_change_alert bypassa:
+  #   - Stability Gate
+  #   - ranking settimanale
+  #   - max_recommendations cap
+  # e viene consegnato immediatamente
+
+  # --- ROLE VISIBILITY (v1.1) ---
+  # Determina chi vede questa raccomandazione.
+  # Calcolato automaticamente dalla categoria del subject.
+  role_visibility:
+    - "developer_fullstack"              # Tutti i fullstack la vedono
+    - "developer_backend"                # Backend dev la vedono (e' un tema auth/backend)
+    - "pm"                               # PM la vedono (via human_friendly)
+    - "stakeholder"                      # Stakeholder la vedono (via human_friendly)
+  # developer_frontend NON la vede a meno che non sia fullstack
+  # Logica: se subject.category in [auth, backend, database, infra] -> backend + fullstack
+  #         se subject.category in [ui, frontend, styling] -> frontend + fullstack
+  #         pm e stakeholder vedono SEMPRE (solo human_friendly)
+
+  # --- SUBJECT ---
+  subject:
+    name: "BetterAuth"
+    type: "library"                      # library | framework | platform | tool | service | pattern | practice
+    url: "https://github.com/better-auth/better-auth"
+    version: "1.2.0"
+    ecosystem: "npm"
+    license: "MIT"
+    maturity: "growth"                   # experimental | growth | stable | declining | deprecated
+
+    traction:
+      github_stars: 12400
+      github_stars_30d_growth: "+2100"
+      npm_weekly_downloads: 45000
+      first_release: "2024-06-15"
+      last_release: "2026-01-28"
+      contributors: 89
+      open_issues: 34
+
+  # --- CLASSIFICATION ---
+  action: "REPLACE_EXISTING"             # REPLACE_EXISTING | COMPLEMENT | NEW_CAPABILITY | MONITOR
+  replaces: "jsonwebtoken + custom auth logic"
+  complements: null
+  enables: null
+  priority: "high"                       # critical | high | medium | low | info
+  confidence: 0.78
+
+  # ============================================================
+  # STABILITY ASSESSMENT (v1.1) — Stability Gate output
+  # ============================================================
+  # Risponde a: "Ne vale davvero la pena cambiare?"
+  # DEVE essere presente su ogni raccomandazione.
+  stability_assessment:
+
+    cost_of_change:
+      effort_days: "2-3"
+      regression_risk: "medium"          # none | low | medium | high | critical
+      learning_curve: "low"              # none | low | medium | high
+      dependencies_affected: 3
+      tests_to_update: "auth flow e2e tests"
+      reversibility: "medium"            # easy | medium | hard | irreversible
+
+    cost_of_no_change:
+      security_exposure: "high"          # none | low | medium | high | critical
+      maintenance_risk: "low"            # none | low | medium | high | critical
+      performance_impact: "none"         # none | low | medium | high | critical
+      deprecation_risk: "none"           # none | low | medium | high | critical
+      compliance_risk: "medium"          # none | low | medium | high | critical
+      detail: >
+        CF finding CF-2026-002 attivo (severity high).
+        La libreria attuale funziona ma il pattern e' insicuro.
+        Possibile implicazione GDPR per sessioni non scadute.
+
+    # Maturity check
+    maturity_gate:
+      subject_maturity: "growth"
+      min_maturity_for_action: "growth"  # Per REPLACE_EXISTING serve almeno growth
+      passed: true
+
+    # Stack health influence
+    stack_health_influence:
+      current_score: 0.72
+      threshold_applied: "medium"        # high | medium | low
+      pain_point_match: true             # Il subject risolve un pain point dichiarato?
+      matched_pain_point: null           # Non e' un pain point esplicito ma e' un CF finding
+
+    # Verdict finale
+    verdict: "RECOMMEND"                 # RECOMMEND | MONITOR | DEFER
+    verdict_reasoning: >
+      [FACT] Il progetto ha un finding CF di severity high sulla gestione JWT.
+      [FACT] BetterAuth risolve esattamente quel pattern con session management nativo.
+      [INFERENCE] Il costo del non-cambiamento (esposizione sicurezza) supera il
+      costo del cambiamento (2-3 giorni effort, rischio regressione medio).
+      [ASSUMPTION] Non ci sono wrapper custom non visibili che complichino la migrazione.
+      VERDICT: Il delta giustifica l'azione.
+
+    # Versione plain per PM
+    verdict_plain: >
+      Consigliamo questo cambiamento perche risolve un problema di sicurezza
+      concreto trovato nell'ultimo audit. Il lavoro necessario e' contenuto
+      (2-3 giorni). Non e' un cambio "perche e' uscito qualcosa di nuovo" ma
+      perche quello che c'e ha un problema noto e documentato.
+
+  # ============================================================
+  # TECHNICAL OUTPUT (per sviluppatori)
+  # ============================================================
+  technical:
+
+    analysis:
+      facts:
+        - ifx_tag: "FACT"
+          claim: "Il progetto usa jsonwebtoken@9.0.2 con logica custom per session management in 3 file del backend."
+          source: "github_api_dependency_graph"
+          source_reliability: "high"
+
+        - ifx_tag: "FACT"
+          claim: "Code Forensics ha rilevato AUTH-JWT-NO-EXPIRY (severity: high) su 3 endpoint."
+          source: "code_forensics_l1"
+          source_reliability: "high"
+          cf_finding_id: "CF-2026-002"
+
+        - ifx_tag: "FACT"
+          claim: "BetterAuth v1.2 include session management con expiry automatico, CSRF protection, e supporto multi-provider OAuth out of the box."
+          source: "github_release_notes"
+          source_reliability: "high"
+          source_url: "https://github.com/better-auth/better-auth/releases/tag/v1.2.0"
+
+        - ifx_tag: "FACT"
+          claim: "BetterAuth ha integrazione nativa con Supabase (PostgreSQL) come database adapter."
+          source: "official_documentation"
+          source_reliability: "high"
+          source_url: "https://www.better-auth.com/docs/adapters/supabase"
+
+      inferences:
+        - ifx_tag: "INFERENCE"
+          claim: "L'adozione di BetterAuth risolverebbe il finding CF-2026-002 eliminando la gestione custom dei token."
+          derived_from: ["CF-2026-002", "BetterAuth session management docs"]
+          confidence: 0.85
+
+        - ifx_tag: "INFERENCE"
+          claim: "Effort di migrazione stimato: 2-3 giorni. Basato su: 3 file coinvolti, API surface limitata, adapter Supabase nativo."
+          derived_from: ["file_count_from_cf", "betterauth_migration_guide"]
+          confidence: 0.65
+
+        - ifx_tag: "INFERENCE"
+          claim: "Riduzione stimata del codice auth custom: ~60-70%, con eliminazione completa della logica JWT manuale."
+          derived_from: ["current_auth_pattern_analysis", "betterauth_feature_set"]
+          confidence: 0.60
+
+      assumptions:
+        - ifx_tag: "ASSUMPTION"
+          claim: "Si assume che non esistano wrapper custom attorno a jsonwebtoken non visibili nei manifest."
+
+        - ifx_tag: "ASSUMPTION"
+          claim: "Si assume che il progetto non richieda auth custom non coperte da BetterAuth (biometric, hardware tokens)."
+
+        - ifx_tag: "ASSUMPTION"
+          claim: "Si assume compatibilita con Next.js 14.2.1. BetterAuth dichiara supporto per Next.js 13+."
+
+    # --- CALIBRATED EFFORT (v1.1) ---
+    # Integra lo storico delle adozioni precedenti per calibrare la stima.
+    effort:
+      raw_estimate_days: "2-3"
+      calibration_applied: true
+      calibration_factor: 1.3            # Da cost_tracking: bias = underestimate
+      calibrated_estimate_days: "2.5-4"  # Stima aggiustata
+      calibration_note: >
+        Stima base: 2-3 giorni. Fattore di calibrazione 1.3x applicato
+        basandosi su 2 adozioni precedenti dove l'effort effettivo e'
+        stato in media il 130% della stima (bias: underestimate).
+        Con piu data points (>5) la calibrazione sara piu precisa.
+      complexity: "medium"
+      breaking_changes: true
+      reversibility: "medium"
+      steps:
+        - "Install BetterAuth + Supabase adapter"
+        - "Configurare auth schema su Supabase"
+        - "Migrare i 3 endpoint da JWT custom a BetterAuth session"
+        - "Aggiornare frontend auth flow"
+        - "Test e2e sui flussi di login/logout/refresh"
+        - "Rimuovere jsonwebtoken e logica custom"
+
+    impact:
+      security:
+        score_change: "+high"
+        detail: "Elimina gestione JWT manuale, risolve CF-2026-002"
+      performance:
+        score_change: "neutral"
+        detail: "Nessun impatto significativo atteso"
+      maintainability:
+        score_change: "+high"
+        detail: "Riduce codice custom auth, meno superficie da mantenere"
+      cost:
+        score_change: "neutral"
+        detail: "MIT license, zero costi. Effort una tantum."
+      risk:
+        level: "medium"
+        detail: "Libreria in fase growth, community attiva ma giovane."
+
+    tradeoffs:
+      gains:
+        - "Security posture migliorata (expiry automatico, CSRF)"
+        - "Meno codice da mantenere"
+        - "OAuth multi-provider gratis"
+      losses:
+        - "Dipendenza da libreria relativamente giovane"
+        - "Meno controllo granulare sulla logica JWT"
+        - "Effort di migrazione non banale (2.5-4 giorni calibrati)"
+
+    failure_modes:
+      - mode: "Breaking changes in BetterAuth v2"
+        probability: "medium"
+        mitigation: "Pin versione, monitorare changelog"
+      - mode: "Adapter Supabase non copre tutti gli use case"
+        probability: "low"
+        mitigation: "Verificare against schema attuale prima di migrare"
+      - mode: "Performance degradation sotto carico"
+        probability: "low"
+        mitigation: "Load test prima del deploy in produzione"
+
+    limitations:
+      - "Analisi basata su metadata e dependency manifest. Comportamento runtime non valutato."
+      - "Effort calibrato su 2 data points. Margine di errore significativo."
+      - "Metriche di traction sono indicatori proxy, non misure dirette di qualita."
+
+  # ============================================================
+  # HUMAN-FRIENDLY OUTPUT (per PM, stakeholder, clienti)
+  # ============================================================
+  human_friendly:
+
+    # Il verdict_plain dallo stability_assessment e' la prima cosa
+    # che il PM legge. Risponde a "dobbiamo davvero cambiare?"
+    # PRIMA del summary.
+
+    title: "Miglioramento della sicurezza del login utente"
+
+    one_liner: >
+      Abbiamo trovato un componente piu sicuro e moderno per gestire
+      l'accesso degli utenti, che risolve un problema di sicurezza
+      esistente e riduce la complessita del sistema.
+
+    summary: >
+      Attualmente la piattaforma gestisce l'accesso degli utenti con
+      un sistema costruito internamente, che presenta un problema noto:
+      le sessioni non scadono automaticamente, il che significa che un
+      accesso compromesso resta valido indefinitamente.
+
+      Esiste ora una soluzione open-source chiamata BetterAuth che
+      risolve esattamente questo problema, offrendo scadenza automatica,
+      protezioni aggiuntive contro attacchi comuni, e la possibilita
+      di aggiungere login tramite Google, GitHub e altri provider
+      senza lavoro aggiuntivo.
+
+      La migrazione richiederebbe circa 3-4 giorni di lavoro e non ha
+      costi di licenza. Il risultato sarebbe un sistema di accesso
+      piu sicuro, piu semplice da mantenere, e con funzionalita
+      aggiuntive che oggi richiederebbero settimane di sviluppo.
+
+    why_now: >
+      Il problema di sicurezza e' stato identificato nell'ultimo audit.
+      BetterAuth ha raggiunto una maturita sufficiente per essere
+      adottato in produzione. Prima non esisteva un'alternativa che
+      si integrasse nativamente con la nostra infrastruttura.
+
+    client_talking_points:
+      - point: "Cosa cambia per l'utente finale?"
+        answer: >
+          L'esperienza di login resta identica. Dietro le quinte,
+          il sistema diventa piu sicuro: le sessioni scadono
+          automaticamente e ci sono protezioni aggiuntive.
+
+      - point: "C'e' rischio di downtime?"
+        answer: >
+          La migrazione viene fatta in parallelo e testata prima
+          dell'attivazione. Il passaggio e' trasparente per gli utenti.
+
+      - point: "Quanto costa?"
+        answer: >
+          Il componente e' gratuito (open-source). Il costo e' solo
+          il tempo di migrazione: circa 3-4 giorni lavorativi.
+
+      - point: "Perche' non e' stato fatto prima?"
+        answer: >
+          Questa soluzione e' maturata solo di recente. Fino a pochi
+          mesi fa non aveva il supporto nativo per la nostra
+          infrastruttura. Ora ce l'ha.
+
+    impact_summary:
+      security: "migliora significativamente"
+      costo: "3-4 giorni di lavoro, zero licenze"
+      rischio: "medio - libreria giovane ma in crescita"
+      urgenza: "consigliato - problema di sicurezza attivo"
+
+  # ============================================================
+  # KQR — KNOWLEDGE QUALIFICATION
+  # ============================================================
+  kqr:
+    overall_confidence: 0.78
+    sources_used:
+      - source: "GitHub dependency graph"
+        type: "automated_scan"
+        reliability: "high"
+        weight: 0.25
+      - source: "Code Forensics L1 finding CF-2026-002"
+        type: "deterministic_analysis"
+        reliability: "high"
+        weight: 0.30
+      - source: "BetterAuth official documentation"
+        type: "primary_source"
+        reliability: "high"
+        weight: 0.25
+      - source: "Hacker News discussion (450+ points)"
+        type: "community_signal"
+        reliability: "medium"
+        weight: 0.10
+      - source: "GitHub Trending (top 5, TypeScript, 3 days)"
+        type: "traction_signal"
+        reliability: "medium"
+        weight: 0.10
+
+    cross_validation:
+      sources_agreeing: 4
+      sources_conflicting: 0
+      sources_insufficient: 1
+
+    confidence_breakdown:
+      factual_basis: 0.90
+      inference_quality: 0.70
+      assumption_risk: 0.65
+
+    qualification_statement: >
+      Raccomandazione basata su 5 fonti indipendenti, di cui 3 ad alta
+      affidabilita. Confidenza complessiva 0.78. Area di maggiore
+      incertezza: stima effort di migrazione.
+
+  # ============================================================
+  # FEEDBACK (v1.1 — con cost tracking)
+  # ============================================================
+  feedback:
+    status: null                         # pending | useful | not_relevant | already_knew | adopted | dismissed
+    user_notes: null
+    adopted_at: null
+
+    # Cost tracking (v1.1) — compilato SOLO se status = adopted
+    cost_tracking:
+      actual_days: null                  # Opzionale: giorni effettivi
+      actual_complexity: null            # Opzionale: trivial|low|medium|high|very_high
+      notes: null                        # Opzionale: testo libero
+      unexpected_issues: null            # Opzionale: cosa non era previsto
+    # Se compilato, alimenta project.cost_tracking.calibration
+
+    adoption_outcome: null               # Compilato post-adozione
+
+
+# ============================================================
+# BREAKING CHANGE ALERT — Schema specifico (v1.1)
+# ============================================================
+# Usato quando type = "breaking_change_alert"
+# Struttura semplificata, consegna immediata.
+breaking_change_alert:
+  id: "bca-uuid-v4"
+  ifx_trace_id: "IFX-2026-0208-BCA-001"
+  project_id: "uuid-del-progetto"
+  generated_at: "2026-02-08T11:00:00Z"
+  type: "breaking_change_alert"
+
+  # Bypassa:
+  #   - Stability Gate (sempre consegnato)
+  #   - max_recommendations cap
+  #   - ranking settimanale
+
+  alert_type: "major_version"            # major_version | deprecation_notice | security_advisory | eol_announcement
+
+  subject:
+    name: "Next.js"
+    current_version: "14.2.1"            # Versione nel progetto
+    new_version: "15.0.0"               # Nuova versione
+    url: "https://nextjs.org/blog/next-15"
+
+  severity: "high"                       # info | medium | high | critical
+
+  technical_summary: >
+    [FACT] Next.js 15.0.0 rilasciato il 2026-02-08.
+    [FACT] Breaking changes: React 19 required, nuovo App Router API,
+    deprecazione di pages/ directory, nuovo bundler (Turbopack default).
+    [INFERENCE] Il progetto usa App Router (14.2) quindi la migrazione
+    e' parziale. pages/ non e' usato.
+    [ASSUMPTION] Nessun plugin Next.js custom che dipende da webpack.
+
+  human_summary: >
+    E' uscita una nuova versione maggiore di Next.js (il framework
+    del frontend). Contiene cambiamenti importanti che richiederanno
+    aggiornamenti al codice. Non e' urgente ma va pianificato.
+
+  action_required: "PLAN"               # IMMEDIATE | PLAN | MONITOR
+  action_detail: >
+    Non serve agire subito. Next.js 14 continuera a ricevere
+    security patch. Pianificare la migrazione entro 3-6 mesi.
+
+  affected_team_roles:
+    - "developer_frontend"
+    - "developer_fullstack"

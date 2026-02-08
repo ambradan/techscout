@@ -1,0 +1,505 @@
+# ============================================================
+# TechScout — Layer 6: Migration Agent Schema v1.0
+# ============================================================
+# Agente di migrazione basato su Claude Code.
+# Esegue le raccomandazioni ADOPTED in modo semi-automatico.
+#
+# PRINCIPIO: l'agente e' un acceleratore, non un decisore.
+# Ogni modifica richiede approvazione umana prima del merge.
+#
+# VINCOLI NON NEGOZIABILI:
+#   1. Branch isolato, mai main/production
+#   2. Commit stato pre-modifica PRIMA di qualsiasi cambio
+#   3. Scope limitato ai file della raccomandazione
+#   4. Human gate obbligatorio prima del merge
+#   5. Se complessita > 2x stima, STOP e chiede
+#   6. Codice sorgente mai esposto fuori dal runtime locale
+# ============================================================
+
+
+# ============================================================
+# AGENT CONFIGURATION (nel project_profile)
+# ============================================================
+# Da aggiungere in project.scouting
+agent_config:
+  enabled: false                         # DEFAULT: false. Opt-in esplicito.
+  mode: "assisted"                       # assisted | supervised
+                                         #
+                                         # assisted: agente lavora, apre PR, aspetta
+                                         # supervised: agente propone un piano,
+                                         #   aspetta ok, poi esegue, poi aspetta merge
+                                         #
+                                         # NON ESISTE modalita "autonomous".
+                                         # Il merge e' SEMPRE manuale.
+
+  # --- GIT CONFIG ---
+  git:
+    provider: "github"                   # github | gitlab | bitbucket
+    remote: "origin"
+    base_branch: "main"                  # Branch da cui creare il branch di migrazione
+    branch_prefix: "techscout/migrate"   # Pattern: techscout/migrate/{rec-id}
+    auto_push: true                      # Push automatico del branch
+    create_pr: true                      # Apri PR automaticamente
+
+  # --- SAFETY LIMITS ---
+  safety:
+    max_files_modified: 15               # Se la migrazione tocca piu file, STOP
+    max_lines_changed: 500               # Se il diff supera queste righe, STOP
+    max_execution_time_minutes: 30       # Timeout hard
+    complexity_threshold: 2.0            # Se effort_reale > stima * threshold, STOP
+    require_tests_pass: true             # Se i test falliscono, non aprire PR
+    require_lint_pass: true              # Se il lint fallisce, non aprire PR
+    forbidden_paths:                     # File che l'agente non puo MAI toccare
+      - ".env*"
+      - "*.secret*"
+      - "docker-compose.prod*"
+      - "terraform/"
+      - "k8s/"
+      - "migrations/"                    # DB migrations richiedono review umano
+    forbidden_operations:
+      - "git merge"
+      - "git push --force"
+      - "rm -rf"
+      - "DROP TABLE"
+      - "DELETE FROM"
+      - "npm publish"
+      - "pip upload"
+
+  # --- NOTIFICATION ---
+  notifications:
+    on_branch_created: true
+    on_migration_complete: true
+    on_migration_failed: true
+    on_safety_stop: true                 # Quando l'agente si ferma per safety
+    on_pr_opened: true
+    channel: "email"                     # email | slack | both
+
+
+# ============================================================
+# MIGRATION JOB — Schema di esecuzione
+# ============================================================
+migration_job:
+  # --- IDENTITY ---
+  id: "mig-uuid-v4"
+  recommendation_id: "rec-uuid-v4"
+  ifx_trace_id: "IFX-2026-0208-MIG-001"
+  project_id: "uuid-del-progetto"
+  triggered_by: "uuid-utente"
+  triggered_at: "2026-02-08T14:00:00Z"
+
+  # --- STATUS ---
+  status: "pending"
+  # pending          -> in coda
+  # backing_up       -> creazione branch + commit stato
+  # planning         -> agente analizza scope (solo mode: supervised)
+  # awaiting_plan_approval -> piano pronto, aspetta ok (solo supervised)
+  # executing        -> agente sta lavorando
+  # testing          -> agente sta runnando test
+  # reporting        -> generazione migration report
+  # awaiting_review  -> PR aperta, aspetta review umano
+  # approved         -> utente ha approvato
+  # merged           -> PR mergiata (rilevato via webhook)
+  # rejected         -> utente ha rifiutato
+  # failed           -> errore durante esecuzione
+  # safety_stopped   -> fermato da un safety gate
+  # timeout          -> superato max_execution_time
+
+  # --- PRE-FLIGHT (Step 0) ---
+  preflight:
+    started_at: "2026-02-08T14:00:05Z"
+    checks:
+      - check: "base_branch_clean"
+        status: "passed"                 # passed | failed | skipped
+        detail: "main branch has no uncommitted changes"
+
+      - check: "tests_green"
+        status: "passed"
+        detail: "42/42 tests passing on main"
+
+      - check: "recommendation_valid"
+        status: "passed"
+        detail: "rec-uuid links to valid recommendation with status ADOPTED"
+
+      - check: "scope_within_limits"
+        status: "passed"
+        detail: "Estimated 3 files, within max_files_modified=15"
+
+      - check: "no_forbidden_paths"
+        status: "passed"
+        detail: "No target files in forbidden_paths"
+
+    all_passed: true
+    # Se any check = failed -> status = "failed", nessuna esecuzione
+
+  # --- BACKUP (Step 1 — NON NEGOZIABILE) ---
+  backup:
+    branch_name: "techscout/migrate/rec-2026-001"
+    created_from: "main"
+    created_from_sha: "a1b2c3d4e5f6"
+    backup_commit_sha: "f6e5d4c3b2a1"   # Commit dello stato esatto pre-modifica
+    backup_commit_message: "techscout: backup pre-migration rec-2026-001"
+    created_at: "2026-02-08T14:00:10Z"
+    pushed: true
+
+  # --- PLAN (Step 2 — solo mode: supervised) ---
+  # In mode "assisted" questo step viene saltato.
+  # In mode "supervised" l'agente produce il piano e aspetta ok.
+  plan:
+    generated_at: "2026-02-08T14:01:00Z"
+    status: "approved"                   # pending | approved | rejected
+    approved_by: "uuid-utente"
+    approved_at: "2026-02-08T14:15:00Z"
+
+    steps:
+      - step: 1
+        action: "Install BetterAuth + Supabase adapter"
+        command: "npm install better-auth @better-auth/supabase"
+        files_affected: ["package.json", "package-lock.json"]
+        risk: "low"
+
+      - step: 2
+        action: "Create auth configuration file"
+        command: "create src/lib/auth.ts"
+        files_affected: ["src/lib/auth.ts"]
+        risk: "low"
+
+      - step: 3
+        action: "Migrate endpoint /api/auth/login"
+        command: "modify src/api/auth/login.ts"
+        files_affected: ["src/api/auth/login.ts"]
+        risk: "medium"
+        notes: "Sostituisce JWT custom con BetterAuth session"
+
+      - step: 4
+        action: "Migrate endpoint /api/auth/refresh"
+        command: "modify src/api/auth/refresh.ts"
+        files_affected: ["src/api/auth/refresh.ts"]
+        risk: "medium"
+
+      - step: 5
+        action: "Migrate endpoint /api/auth/logout"
+        command: "modify src/api/auth/logout.ts"
+        files_affected: ["src/api/auth/logout.ts"]
+        risk: "low"
+
+      - step: 6
+        action: "Update frontend auth hook"
+        command: "modify src/hooks/useAuth.ts"
+        files_affected: ["src/hooks/useAuth.ts"]
+        risk: "medium"
+
+      - step: 7
+        action: "Remove jsonwebtoken dependency"
+        command: "npm uninstall jsonwebtoken"
+        files_affected: ["package.json", "package-lock.json"]
+        risk: "low"
+
+      - step: 8
+        action: "Run test suite"
+        command: "npm test"
+        expected: "All auth-related tests updated and passing"
+        risk: "medium"
+
+    estimated_files: 7
+    estimated_lines: 180
+    within_safety_limits: true
+
+  # --- EXECUTION (Step 3) ---
+  execution:
+    started_at: "2026-02-08T14:15:30Z"
+    completed_at: "2026-02-08T14:22:45Z"
+    duration_minutes: 7.25
+
+    claude_code:
+      model: "claude-sonnet-4-5"
+      session_id: "cc-session-xxxxx"
+      total_tokens: 48000
+      api_cost_usd: 0.12
+
+    steps_executed:
+      - step: 1
+        status: "completed"
+        duration_seconds: 15
+        output: "Added better-auth@1.2.0, @better-auth/supabase@1.0.3"
+
+      - step: 2
+        status: "completed"
+        duration_seconds: 25
+        output: "Created src/lib/auth.ts with Supabase adapter config"
+
+      - step: 3
+        status: "completed"
+        duration_seconds: 45
+        output: "Replaced JWT sign/verify with BetterAuth session create"
+        notes: "Found custom rate limiter wrapping JWT — preserved it"
+
+      - step: 4
+        status: "completed"
+        duration_seconds: 30
+        output: "Replaced manual token refresh with BetterAuth session refresh"
+
+      - step: 5
+        status: "completed"
+        duration_seconds: 20
+        output: "Replaced token invalidation with BetterAuth session destroy"
+
+      - step: 6
+        status: "completed"
+        duration_seconds: 40
+        output: "Updated useAuth hook to use BetterAuth client SDK"
+
+      - step: 7
+        status: "completed"
+        duration_seconds: 10
+        output: "Removed jsonwebtoken@9.0.2"
+
+      - step: 8
+        status: "completed"
+        duration_seconds: 120
+        output: "42/42 tests passing (3 auth tests updated)"
+
+    # --- SAFETY MONITORING (durante esecuzione) ---
+    safety_checks:
+      files_modified: 7
+      files_limit: 15
+      lines_changed: 156
+      lines_limit: 500
+      forbidden_paths_touched: 0
+      forbidden_operations_attempted: 0
+      complexity_ratio: 0.97             # effort_reale / stima
+      complexity_limit: 2.0
+      all_within_limits: true
+
+    # Eventuali decisioni ambigue incontrate
+    ambiguity_log:
+      - at_step: 3
+        description: "Found custom rate limiter wrapping JWT verify call"
+        decision: "Preserved rate limiter, wrapped around BetterAuth session check instead"
+        confidence: 0.80
+        ifx_tag: "INFERENCE"
+        # Se confidence < 0.5 l'agente si sarebbe fermato
+
+  # --- TESTING (Step 4) ---
+  testing:
+    started_at: "2026-02-08T14:22:45Z"
+    completed_at: "2026-02-08T14:24:50Z"
+
+    test_suite:
+      total: 42
+      passed: 42
+      failed: 0
+      skipped: 0
+      new_tests_added: 0
+      tests_modified: 3
+
+    lint:
+      passed: true
+      warnings: 2
+      errors: 0
+
+    type_check:
+      passed: true
+      errors: 0
+
+    all_green: true
+
+  # --- MIGRATION REPORT (Step 5) ---
+  report:
+    generated_at: "2026-02-08T14:25:00Z"
+
+    summary: >
+      Migrazione completata con successo su branch
+      techscout/migrate/rec-2026-001.
+      7 file modificati, 156 righe cambiate.
+      Tutti i test passano (42/42).
+      Trovato rate limiter custom su JWT — preservato e adattato.
+
+    diff_stats:
+      files_changed: 7
+      insertions: 98
+      deletions: 58
+      net_change: "+40 lines"
+
+    files_detail:
+      - file: "package.json"
+        change: "added better-auth, removed jsonwebtoken"
+        risk: "low"
+      - file: "src/lib/auth.ts"
+        change: "new file — BetterAuth config"
+        risk: "low"
+      - file: "src/api/auth/login.ts"
+        change: "JWT sign → BetterAuth session create"
+        risk: "medium"
+      - file: "src/api/auth/refresh.ts"
+        change: "JWT verify+resign → BetterAuth session refresh"
+        risk: "medium"
+      - file: "src/api/auth/logout.ts"
+        change: "token blacklist → BetterAuth session destroy"
+        risk: "low"
+      - file: "src/hooks/useAuth.ts"
+        change: "custom JWT client → BetterAuth React SDK"
+        risk: "medium"
+      - file: "package-lock.json"
+        change: "dependency tree update"
+        risk: "low"
+
+    # CF findings impattati
+    cf_findings_addressed:
+      - finding_id: "CF-2026-002"
+        pattern: "AUTH-JWT-NO-EXPIRY"
+        status: "resolved"
+        detail: "BetterAuth gestisce expiry automaticamente"
+
+    # Cose che l'agente ha notato durante l'esecuzione
+    observations:
+      - type: "discovery"
+        ifx_tag: "FACT"
+        detail: "Rate limiter custom trovato in login.ts (non visibile da manifest)"
+      - type: "suggestion"
+        ifx_tag: "INFERENCE"
+        detail: >
+          Il rate limiter custom potrebbe essere sostituito da un middleware
+          dedicato. Fuori scope di questa migrazione ma raccomandato come
+          step successivo.
+
+    # Confronto stima vs realta
+    effort_comparison:
+      estimated_days: "2.5-4"            # Dalla raccomandazione (calibrata)
+      actual_execution_minutes: 7.25     # Tempo dell'agente
+      human_review_estimate: "30-60 min" # Stima per review della PR
+      total_estimate: "< 0.5 giorni con agente"
+      speedup_factor: "5-8x rispetto a manuale"
+
+    # IFX trace completo
+    ifx_trace:
+      trace_id: "IFX-2026-0208-MIG-001"
+      recommendation_trace: "IFX-2026-0208-001"
+      facts_count: 8
+      inferences_count: 4
+      assumptions_count: 3
+      assumptions_validated: 2           # Confermate durante esecuzione
+      assumptions_invalidated: 0
+      new_facts_discovered: 1            # Rate limiter custom
+
+  # --- PR (Step 6) ---
+  pull_request:
+    url: "https://github.com/ambra-org/betstarters-backend/pull/47"
+    number: 47
+    title: "techscout: migrate auth from JWT to BetterAuth [rec-2026-001]"
+    body: "[auto-generated migration report — vedi sopra]"
+    branch: "techscout/migrate/rec-2026-001"
+    target: "main"
+    created_at: "2026-02-08T14:25:10Z"
+    status: "awaiting_review"            # awaiting_review | approved | merged | rejected
+
+    # Labels aggiunte automaticamente
+    labels:
+      - "techscout"
+      - "migration"
+      - "security"
+
+    # Review checklist (inclusa nel body della PR)
+    review_checklist:
+      - "[ ] Verificare che il rate limiter custom funzioni correttamente"
+      - "[ ] Testare login flow end-to-end manualmente"
+      - "[ ] Verificare session expiry in ambiente staging"
+      - "[ ] Confermare che l'adapter Supabase usa lo schema corretto"
+
+  # --- HUMAN GATE (Step 7) ---
+  human_review:
+    status: "pending"                    # pending | approved | rejected | changes_requested
+    reviewer: null
+    reviewed_at: null
+    comments: null
+    merge_sha: null
+
+  # --- POST-MERGE (Step 8 — automatico dopo merge) ---
+  post_merge:
+    merged_at: null
+    merged_by: null
+    # Quando la PR viene mergiata (rilevato via webhook):
+    # 1. Aggiorna recommendation.feedback.status → "adopted"
+    # 2. Aggiorna recommendation.feedback.cost_tracking
+    # 3. Ricalcola project.stack_health
+    # 4. Aggiorna project.cf_findings (finding risolto)
+    # 5. Ricalcola cost_tracking.calibration
+    auto_updates:
+      recommendation_status: "adopted"
+      cost_tracking_actual_days: 0.1     # 7 min agente + review umano
+      cf_findings_resolved: ["CF-2026-002"]
+      stack_health_recalculated: false   # true dopo merge
+
+
+# ============================================================
+# SAFETY STOP — Schema per quando l'agente si ferma
+# ============================================================
+# Se qualsiasi safety gate viene violato, l'agente:
+# 1. Fa commit di quello che ha fatto finora
+# 2. Genera un partial report con motivo dello stop
+# 3. Notifica l'utente
+# 4. NON apre PR (stato incompleto)
+# L'utente decide: continuare manualmente o abortire.
+safety_stop:
+  triggered: false
+  trigger_reason: null
+  # Possibili ragioni:
+  # "files_limit_exceeded"      -> troppi file toccati
+  # "lines_limit_exceeded"      -> diff troppo grande
+  # "complexity_exceeded"        -> effort_reale > 2x stima
+  # "forbidden_path_access"     -> tentativo di toccare file proibito
+  # "forbidden_operation"        -> tentativo di operazione proibita
+  # "tests_failed"              -> test non passano dopo modifica
+  # "ambiguity_high"            -> decisione ambigua con confidence < 0.5
+  # "timeout"                   -> superato max_execution_time
+  # "api_error"                 -> errore Claude API
+  trigger_at_step: null
+  partial_work_committed: false
+  partial_branch: null
+  recovery_options:
+    - "Continuare manualmente dal punto di stop"
+    - "Abortire e cancellare il branch"
+    - "Modificare safety limits e riprovare"
+
+
+# ============================================================
+# AGENT AUDIT LOG — Tracciabilita completa
+# ============================================================
+# Ogni azione dell'agente viene loggata.
+# Immutabile. Usato per audit post-incidente.
+audit_log:
+  entries:
+    - timestamp: "2026-02-08T14:00:05Z"
+      action: "preflight_start"
+      detail: "Running 5 preflight checks"
+
+    - timestamp: "2026-02-08T14:00:08Z"
+      action: "preflight_complete"
+      detail: "All 5 checks passed"
+
+    - timestamp: "2026-02-08T14:00:10Z"
+      action: "branch_created"
+      detail: "techscout/migrate/rec-2026-001 from main@a1b2c3d"
+
+    - timestamp: "2026-02-08T14:00:12Z"
+      action: "backup_committed"
+      detail: "Backup commit f6e5d4c pushed"
+
+    - timestamp: "2026-02-08T14:15:30Z"
+      action: "execution_start"
+      detail: "Starting 8-step migration plan"
+
+    - timestamp: "2026-02-08T14:17:15Z"
+      action: "ambiguity_detected"
+      detail: "Custom rate limiter in login.ts — confidence 0.80, proceeding"
+
+    - timestamp: "2026-02-08T14:22:45Z"
+      action: "execution_complete"
+      detail: "All 8 steps completed in 7.25 minutes"
+
+    - timestamp: "2026-02-08T14:24:50Z"
+      action: "tests_complete"
+      detail: "42/42 passed, lint ok, typecheck ok"
+
+    - timestamp: "2026-02-08T14:25:10Z"
+      action: "pr_opened"
+      detail: "PR #47 opened, awaiting human review"

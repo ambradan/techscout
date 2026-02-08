@@ -1,0 +1,372 @@
+# ============================================================
+# TechScout — Project Profile Schema v1.1
+# ============================================================
+# Contratto centrale del sistema.
+# Qualunque provider (GitHub, GitLab, upload locale, CLI, ecc.)
+# deve produrre un oggetto conforme a questo schema.
+# Il Matching Engine consuma SOLO questo formato.
+#
+# CHANGELOG v1.1:
+#   - Aggiunto team/role awareness
+#   - Aggiunto stack_health per Stability Gate
+#   - Aggiunto cost_tracking_history per calibrazione stime
+#   - Aggiunto breaking_changes_config
+#   - Aggiunto export_config
+# ============================================================
+
+project:
+  # --- IDENTITY ---
+  id: "uuid-v4"
+  name: "BetStarters Sales Automation"
+  slug: "betstarters-sales"
+  owner_id: "uuid-v4"
+  created_at: "2026-02-08T00:00:00Z"
+  updated_at: "2026-02-08T00:00:00Z"
+
+  # --- TEAM (v1.1) ---
+  # Opzionale. Se vuoto, il progetto = 1 persona che vede tutto.
+  # Se compilato, la delivery filtra per ruolo.
+  team:
+    - user_id: "uuid-ambra"
+      name: "Ambra"
+      role: "developer_fullstack"        # developer_frontend | developer_backend |
+                                         # developer_fullstack | pm | stakeholder | other
+      receives_technical_brief: true
+      receives_human_brief: false
+      notification_channel: "email"
+
+    - user_id: "uuid-marco"
+      name: "Marco"
+      role: "pm"
+      receives_technical_brief: false
+      receives_human_brief: true
+      notification_channel: "email"
+
+    # Se il progetto ha 1 sola persona e non compila team:
+    # -> riceve entrambi i brief
+    # -> nessun filtro per ruolo sulle raccomandazioni
+
+  # --- SCOUTING CONFIG ---
+  scouting:
+    enabled: true
+    frequency: "weekly"                  # daily | weekly | biweekly | monthly
+    max_recommendations: 5               # Hard cap per brief
+    focus_areas:
+      - security
+      - performance
+      - developer_experience
+    exclude_categories:
+      - mobile
+      - blockchain
+    notification_channels:
+      - type: "email"
+        target: "ambra@example.com"
+      - type: "slack"
+        target: "#tech-scouting"
+
+    # --- BREAKING CHANGES CONFIG (v1.1) ---
+    breaking_changes:
+      enabled: true
+      alert_on:
+        - "major_version"                # Major release di una dipendenza
+        - "deprecation_notice"           # API/feature deprecata
+        - "security_advisory"            # CVE pubblicato
+        - "eol_announcement"             # End of life annunciato
+      delivery: "immediate"              # immediate | next_brief
+      channels:
+        - type: "email"
+          target: "ambra@example.com"
+        - type: "slack"
+          target: "#alerts"
+
+    # --- EXPORT CONFIG (v1.1) ---
+    export:
+      enabled: true
+      format: ["pdf", "json"]            # pdf | json | markdown
+      frequency: "after_each_brief"      # after_each_brief | weekly | monthly
+      storage: "supabase_storage"        # supabase_storage | s3
+      retention_days: 365                # Quanto tempo tenere gli archivi
+
+    # --- MIGRATION AGENT CONFIG (v1.1) ---
+    # Schema completo in agent.schema.yaml
+    agent:
+      enabled: false                     # DEFAULT: false. Opt-in esplicito.
+      mode: "assisted"                   # assisted | supervised
+      git_provider: "github"             # github | gitlab | bitbucket
+      base_branch: "main"
+      branch_prefix: "techscout/migrate"
+      safety:
+        max_files_modified: 15
+        max_lines_changed: 500
+        max_execution_time_minutes: 30
+        complexity_threshold: 2.0
+        require_tests_pass: true
+
+  # --- SOURCES (multi-provider) ---
+  sources:
+    - provider: "github"
+      connection:
+        type: "oauth"
+        repos:
+          - owner: "ambra-org"
+            name: "betstarters-frontend"
+            branch: "main"
+          - owner: "ambra-org"
+            name: "betstarters-backend"
+            branch: "main"
+      last_scan: "2026-02-07T14:30:00Z"
+
+    - provider: "gitlab"
+      connection:
+        type: "token"
+        instance: "https://gitlab.com"
+        repos:
+          - project_id: 12345
+            branch: "main"
+      last_scan: null
+
+    - provider: "railway"
+      connection:
+        type: "token"
+        project_id: "prj_xxxxx"
+      last_scan: "2026-02-06T10:00:00Z"
+
+    - provider: "vercel"
+      connection:
+        type: "token"
+        project_id: "prj_xxxxx"
+      last_scan: null
+
+    - provider: "local_upload"
+      connection:
+        type: "none"
+        upload_id: "upload_xxxxx"
+      last_scan: "2026-02-05T09:00:00Z"
+
+    - provider: "cli_local"
+      connection:
+        type: "none"
+        last_push: "2026-02-07T16:00:00Z"
+      last_scan: "2026-02-07T16:00:00Z"
+
+    - provider: "manual_manifest"
+      connection:
+        type: "none"
+        files_uploaded:
+          - "package.json"
+          - "requirements.txt"
+      last_scan: "2026-02-04T12:00:00Z"
+
+  # --- STACK (output normalizzato dai provider) ---
+  stack:
+    languages:
+      - name: "TypeScript"
+        percentage: 62.3
+        role: "primary"
+      - name: "Python"
+        percentage: 28.1
+        role: "secondary"
+      - name: "SQL"
+        percentage: 5.2
+        role: "config"
+      - name: "Shell"
+        percentage: 4.4
+        role: "scripting"
+
+    frameworks:
+      - name: "Next.js"
+        version: "14.2.1"
+        category: "frontend"
+      - name: "FastAPI"
+        version: "0.109.0"
+        category: "backend"
+      - name: "Tailwind CSS"
+        version: "3.4.1"
+        category: "styling"
+
+    databases:
+      - name: "PostgreSQL"
+        version: "15"
+        provider: "Supabase"
+      - name: "Redis"
+        version: "7"
+        provider: "Railway"
+
+    infrastructure:
+      hosting:
+        - name: "Railway"
+          services: ["backend-api", "redis", "worker"]
+        - name: "Vercel"
+          services: ["frontend"]
+      ci_cd:
+        - name: "GitHub Actions"
+      containerization:
+        - name: "Docker"
+          version: "24"
+
+    key_dependencies:
+      - name: "supabase-js"
+        version: "2.39.0"
+        ecosystem: "npm"
+        category: "database_client"
+      - name: "openai"
+        version: "4.28.0"
+        ecosystem: "pip"
+        category: "ai_sdk"
+      - name: "jsonwebtoken"
+        version: "9.0.2"
+        ecosystem: "npm"
+        category: "auth"
+
+    all_dependencies:
+      npm:
+        direct: 47
+        dev: 23
+        packages: ["next", "react", "supabase-js", "..."]
+      pip:
+        direct: 18
+        dev: 8
+        packages: ["fastapi", "uvicorn", "openai", "..."]
+
+  # --- STACK HEALTH (v1.1) ---
+  # Calcolato automaticamente. Usato dallo Stability Gate.
+  stack_health:
+    overall_score: 0.72                  # 0-1
+    last_calculated: "2026-02-08T00:00:00Z"
+
+    components:
+      security:
+        score: 0.55
+        factors:
+          - "2 CF findings severity HIGH"
+          - "jsonwebtoken non ha advisory ma ha finding custom"
+      freshness:
+        score: 0.80
+        factors:
+          - "85% dipendenze entro 2 major versions dal latest"
+          - "Next.js 14.2 (latest: 15.1) - 1 major behind"
+          - "FastAPI 0.109 (latest: 0.115) - minor behind"
+      maintenance_risk:
+        score: 0.90
+        factors:
+          - "Tutte le dipendenze chiave hanno maintainer attivi"
+          - "Nessuna dipendenza con >6 mesi senza commit"
+      complexity:
+        score: 0.65
+        factors:
+          - "2 linguaggi primari"
+          - "3 piattaforme di hosting"
+          - "47+18 dipendenze dirette"
+
+    # Stability Gate thresholds:
+    # overall > 0.8  -> soglia ALTA: solo critical/high passano
+    # overall 0.5-0.8 -> soglia MEDIA: critical/high sempre,
+    #                     medium solo se match pain_point
+    # overall < 0.5  -> soglia BASSA: progetto ha problemi,
+    #                     piu raccomandazioni passano
+    # ECCEZIONE: breaking_changes alerts bypassano SEMPRE
+
+  # --- MANIFEST (compilato dall'utente) ---
+  manifest:
+    phase: "growth"
+    description: >
+      Piattaforma di sales automation per BetStarters.
+      Frontend Next.js, backend FastAPI, AI-powered lead scoring
+      e pipeline management con integrazione CRM.
+    objectives:
+      - "Ridurre il tempo di risposta ai lead sotto i 5 minuti"
+      - "Automatizzare il 70% delle comunicazioni follow-up"
+      - "Integrare market intelligence da fonti esterne"
+    pain_points:
+      - "Le Edge Functions su Supabase hanno cold start troppo alti"
+      - "Il rate limiting dell'API OpenAI causa timeout in produzione"
+      - "Manca un sistema di caching intelligente per le risposte AI"
+    constraints:
+      - "Budget infra max 200 euro/mese"
+      - "Team di 1 persona (freelancer)"
+      - "GDPR compliance obbligatoria"
+      - "No vendor lock-in su servizi AI"
+    open_to:
+      - "Cambiare provider AI (non solo OpenAI)"
+      - "Migrare da Edge Functions a altro runtime"
+      - "Adottare nuovi tool di monitoring"
+    not_open_to:
+      - "Migrare da Supabase (PostgreSQL)"
+      - "Riscrivere il frontend da zero"
+      - "Cambiare linguaggio principale"
+
+  # --- CODE FORENSICS FINDINGS ---
+  cf_findings:
+    last_scan: "2026-02-06T08:00:00Z"
+    scan_version: "4.0.0"
+    summary:
+      total_findings: 12
+      critical: 0
+      high: 2
+      medium: 7
+      low: 3
+    findings:
+      - id: "CF-2026-001"
+        layer: "L1"
+        category: "crypto"
+        severity: "high"
+        pattern_id: "CRYPTO-WEAK-HASH"
+        description: "Uso di algoritmo di hashing non raccomandato per password storage"
+        files_affected: 2
+        ifx_tag: "FACT"
+      - id: "CF-2026-002"
+        layer: "L1"
+        category: "auth"
+        severity: "high"
+        pattern_id: "AUTH-JWT-NO-EXPIRY"
+        description: "Token JWT senza expiry esplicito in 3 endpoint"
+        files_affected: 3
+        ifx_tag: "FACT"
+      - id: "CF-2026-003"
+        layer: "L1"
+        category: "compliance"
+        severity: "medium"
+        pattern_id: "GDPR-PII-LOGGING"
+        description: "Possibile logging di PII senza sanitizzazione"
+        files_affected: 5
+        ifx_tag: "INFERENCE"
+
+  # --- COST TRACKING HISTORY (v1.1) ---
+  cost_tracking:
+    adoptions:
+      - recommendation_id: "rec-2026-001"
+        subject: "Migrazione da axios a ky"
+        estimated_days: 1
+        actual_days: 0.5
+        notes: "Piu facile del previsto, API quasi identica"
+        adopted_at: "2026-01-15T00:00:00Z"
+      - recommendation_id: "rec-2026-002"
+        subject: "Aggiunta Sentry per error monitoring"
+        estimated_days: 1
+        actual_days: 2
+        notes: "Setup ok ma configurazione source maps ha richiesto piu tempo"
+        adopted_at: "2026-01-22T00:00:00Z"
+    calibration:
+      total_adoptions: 2
+      avg_estimate_accuracy: 0.75
+      bias_direction: "underestimate"
+      # underestimate -> stime future x 1.2-1.5
+      # overestimate -> stime future ridotte
+      # balanced o < 5 data points -> nessun aggiustamento
+
+  # --- IFX/KQR GOVERNANCE METADATA ---
+  governance:
+    ifx_version: "1.0"
+    kqr_version: "1.0"
+    last_profile_validation: "2026-02-08T00:00:00Z"
+    profile_completeness_score: 0.85
+    data_sources_used:
+      - source: "github_api"
+        reliability: "high"
+        last_fetched: "2026-02-07T14:30:00Z"
+      - source: "user_manifest"
+        reliability: "medium"
+        last_fetched: "2026-02-08T00:00:00Z"
+      - source: "code_forensics_l1"
+        reliability: "high"
+        last_fetched: "2026-02-06T08:00:00Z"
