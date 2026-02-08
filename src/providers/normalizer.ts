@@ -7,6 +7,7 @@
  * This is the single source of truth for profile structure.
  */
 
+import { logger } from '../lib/logger';
 import type {
   PartialProjectProfile,
   ProjectProfile,
@@ -16,6 +17,8 @@ import type {
   KeyDependency,
   AllDependencies,
   StackHealth,
+  StackHealthComponents,
+  HealthComponentScore,
   ProjectManifest,
   CFFindings,
   CostTracking,
@@ -121,6 +124,15 @@ function mergeKeyDependencies(partials: PartialProjectProfile[]): KeyDependency[
 }
 
 /**
+ * Helper to get count from a field that can be number or string array.
+ */
+function getCount(value: number | string[] | undefined): number {
+  if (value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  return value.length;
+}
+
+/**
  * Merge all dependencies summary.
  */
 function mergeAllDependencies(partials: PartialProjectProfile[]): AllDependencies {
@@ -134,12 +146,16 @@ function mergeAllDependencies(partials: PartialProjectProfile[]): AllDependencie
 
       const existing = result[ecosystem];
       if (!existing) {
-        result[ecosystem] = { ...deps };
+        result[ecosystem] = {
+          direct: getCount(deps.direct),
+          dev: getCount(deps.dev),
+          packages: deps.packages ?? [],
+        };
       } else {
         // Merge - take max counts
         result[ecosystem] = {
-          direct: Math.max(existing.direct, deps.direct),
-          dev: Math.max(existing.dev, deps.dev),
+          direct: Math.max(getCount(existing.direct), getCount(deps.direct)),
+          dev: Math.max(getCount(existing.dev), getCount(deps.dev)),
           packages: [...new Set([...(existing.packages ?? []), ...(deps.packages ?? [])])],
         };
       }
@@ -163,6 +179,320 @@ function mergeStack(partials: PartialProjectProfile[]): ProjectStack {
     },
     keyDependencies: mergeKeyDependencies(partials),
     allDependencies: mergeAllDependencies(partials),
+  };
+}
+
+// ============================================================
+// STACK HEALTH CALCULATION
+// ============================================================
+
+/**
+ * Known latest major versions for common packages.
+ * Used to estimate dependency freshness.
+ */
+const KNOWN_LATEST_MAJORS: Record<string, number> = {
+  // Node.js ecosystem
+  'react': 19,
+  'next': 15,
+  'vue': 3,
+  'nuxt': 3,
+  'angular': 19,
+  'svelte': 5,
+  'express': 4,
+  'fastify': 5,
+  'nestjs': 10,
+  '@nestjs/core': 10,
+  'typescript': 5,
+  'vite': 6,
+  'vitest': 3,
+  'jest': 30,
+  'zod': 3,
+  'prisma': 6,
+  '@prisma/client': 6,
+  'drizzle-orm': 0, // Still 0.x
+  'tailwindcss': 4,
+  // Python ecosystem
+  'django': 5,
+  'flask': 3,
+  'fastapi': 0, // Still 0.x
+  'pytest': 8,
+  // Rust ecosystem
+  'tokio': 1,
+  'actix-web': 4,
+  'axum': 0, // Still 0.x
+};
+
+/**
+ * Parse a version string to extract major version.
+ */
+function parseMajorVersion(version: string): number | null {
+  if (!version || version === 'unknown') return null;
+  const match = version.match(/^(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Calculate dependency freshness score based on version analysis.
+ * Returns a score from 0 to 1.
+ */
+function calculateDependencyFreshness(
+  keyDependencies: KeyDependency[],
+  allDependencies: AllDependencies
+): HealthComponentScore {
+  const factors: string[] = [];
+  let freshnessScores: number[] = [];
+
+  // Analyze key dependencies
+  for (const dep of keyDependencies) {
+    const latestMajor = KNOWN_LATEST_MAJORS[dep.name];
+    if (latestMajor !== undefined) {
+      const currentMajor = parseMajorVersion(dep.version);
+      if (currentMajor !== null) {
+        if (currentMajor >= latestMajor) {
+          freshnessScores.push(1.0);
+          factors.push(`${dep.name}@${dep.version} is current`);
+        } else if (currentMajor >= latestMajor - 1) {
+          freshnessScores.push(0.7);
+          factors.push(`${dep.name}@${dep.version} is 1 major behind`);
+        } else if (currentMajor >= latestMajor - 2) {
+          freshnessScores.push(0.4);
+          factors.push(`${dep.name}@${dep.version} is 2 majors behind`);
+        } else {
+          freshnessScores.push(0.2);
+          factors.push(`${dep.name}@${dep.version} is significantly outdated`);
+        }
+      }
+    }
+  }
+
+  // Calculate total dependency count
+  let totalDeps = 0;
+  for (const eco of Object.values(allDependencies)) {
+    if (eco) {
+      totalDeps += getCount(eco.direct) + getCount(eco.dev);
+    }
+  }
+
+  // Factor in dependency count (more deps = higher maintenance burden)
+  if (totalDeps > 100) {
+    freshnessScores.push(0.5);
+    factors.push(`High dependency count (${totalDeps})`);
+  } else if (totalDeps > 50) {
+    freshnessScores.push(0.7);
+    factors.push(`Moderate dependency count (${totalDeps})`);
+  } else if (totalDeps > 0) {
+    freshnessScores.push(0.9);
+    factors.push(`Reasonable dependency count (${totalDeps})`);
+  }
+
+  // Calculate average score
+  const score = freshnessScores.length > 0
+    ? freshnessScores.reduce((a, b) => a + b, 0) / freshnessScores.length
+    : 0.5;
+
+  if (factors.length === 0) {
+    factors.push('Insufficient version data for analysis');
+  }
+
+  return {
+    score: Math.round(score * 100) / 100,
+    factors: factors.slice(0, 5), // Limit to top 5 factors
+  };
+}
+
+/**
+ * Calculate security score based on known patterns.
+ */
+function calculateSecurityScore(
+  keyDependencies: KeyDependency[],
+  frameworks: FrameworkInfo[]
+): HealthComponentScore {
+  const factors: string[] = [];
+  let score = 0.7; // Start with moderate score
+
+  // Check for auth libraries
+  const hasAuth = keyDependencies.some(d =>
+    ['better-auth', 'next-auth', '@auth/core', 'passport', 'jsonwebtoken'].includes(d.name)
+  );
+  if (hasAuth) {
+    score += 0.1;
+    factors.push('Authentication library detected');
+  }
+
+  // Check for validation libraries
+  const hasValidation = keyDependencies.some(d =>
+    ['zod', 'yup', 'joi', 'class-validator'].includes(d.name)
+  );
+  if (hasValidation) {
+    score += 0.1;
+    factors.push('Input validation library detected');
+  }
+
+  // Check for known secure frameworks
+  const secureFrameworks = ['Next.js', 'NestJS', 'FastAPI', 'Django'];
+  const hasSecureFramework = frameworks.some(f =>
+    secureFrameworks.includes(f.name)
+  );
+  if (hasSecureFramework) {
+    score += 0.05;
+    factors.push('Framework with built-in security features');
+  }
+
+  if (factors.length === 0) {
+    factors.push('Initial security assessment pending');
+  }
+
+  return {
+    score: Math.min(1, Math.round(score * 100) / 100),
+    factors,
+  };
+}
+
+/**
+ * Calculate maintenance risk score.
+ */
+function calculateMaintenanceRisk(
+  allDependencies: AllDependencies,
+  keyDependencies: KeyDependency[]
+): HealthComponentScore {
+  const factors: string[] = [];
+  let score = 0.7;
+
+  // Check ecosystem diversity
+  const ecosystems = Object.keys(allDependencies).filter(k => allDependencies[k]);
+  if (ecosystems.length > 3) {
+    score -= 0.1;
+    factors.push(`Multiple ecosystems (${ecosystems.join(', ')})`);
+  } else if (ecosystems.length === 1) {
+    score += 0.1;
+    factors.push('Single ecosystem reduces maintenance overhead');
+  }
+
+  // Check for ORMs (can be maintenance burden)
+  const hasOrm = keyDependencies.some(d => d.category === 'orm');
+  if (hasOrm) {
+    factors.push('ORM detected - migrations require attention');
+  }
+
+  // Check key dependency count
+  if (keyDependencies.length > 10) {
+    score -= 0.1;
+    factors.push('Many key dependencies to maintain');
+  }
+
+  if (factors.length === 0) {
+    factors.push('Maintenance assessment pending');
+  }
+
+  return {
+    score: Math.max(0, Math.min(1, Math.round(score * 100) / 100)),
+    factors,
+  };
+}
+
+/**
+ * Calculate complexity score.
+ */
+function calculateComplexityScore(
+  languages: LanguageInfo[],
+  frameworks: FrameworkInfo[],
+  allDependencies: AllDependencies
+): HealthComponentScore {
+  const factors: string[] = [];
+  let score = 0.8;
+
+  // Language complexity
+  if (languages.length > 3) {
+    score -= 0.1;
+    factors.push(`Multiple languages (${languages.map(l => l.name).join(', ')})`);
+  }
+
+  // Framework count
+  if (frameworks.length > 5) {
+    score -= 0.15;
+    factors.push('Many frameworks increase complexity');
+  } else if (frameworks.length <= 2) {
+    score += 0.05;
+    factors.push('Focused framework selection');
+  }
+
+  // Check for both frontend and backend frameworks
+  const hasFrontend = frameworks.some(f => f.category === 'frontend');
+  const hasBackend = frameworks.some(f => f.category === 'backend');
+  if (hasFrontend && hasBackend) {
+    factors.push('Full-stack application');
+  }
+
+  if (factors.length === 0) {
+    factors.push('Complexity assessment pending');
+  }
+
+  return {
+    score: Math.max(0, Math.min(1, Math.round(score * 100) / 100)),
+    factors,
+  };
+}
+
+/**
+ * Calculate initial stack health based on dependency analysis.
+ */
+function calculateStackHealth(stack: ProjectStack): StackHealth {
+  logger.debug('Calculating stack health');
+
+  const freshness = calculateDependencyFreshness(
+    stack.keyDependencies,
+    stack.allDependencies
+  );
+
+  const security = calculateSecurityScore(
+    stack.keyDependencies,
+    stack.frameworks
+  );
+
+  const maintenanceRisk = calculateMaintenanceRisk(
+    stack.allDependencies,
+    stack.keyDependencies
+  );
+
+  const complexity = calculateComplexityScore(
+    stack.languages,
+    stack.frameworks,
+    stack.allDependencies
+  );
+
+  const components: StackHealthComponents = {
+    security,
+    freshness,
+    maintenanceRisk,
+    complexity,
+  };
+
+  // Calculate overall score as weighted average
+  const weights = {
+    security: 0.3,
+    freshness: 0.3,
+    maintenanceRisk: 0.2,
+    complexity: 0.2,
+  };
+
+  const overallScore =
+    security.score * weights.security +
+    freshness.score * weights.freshness +
+    maintenanceRisk.score * weights.maintenanceRisk +
+    complexity.score * weights.complexity;
+
+  logger.info('Stack health calculated', {
+    overall: Math.round(overallScore * 100) / 100,
+    security: security.score,
+    freshness: freshness.score,
+    maintenanceRisk: maintenanceRisk.score,
+    complexity: complexity.score,
+  });
+
+  return {
+    overallScore: Math.round(overallScore * 100) / 100,
+    lastCalculated: new Date().toISOString(),
+    components,
   };
 }
 
@@ -244,7 +574,6 @@ function getDefaultScoutingConfig(): ScoutingConfig {
     },
     agent: {
       enabled: false,
-      mode: 'assisted',
       gitProvider: 'github',
       baseBranch: 'main',
       branchPrefix: 'techscout/migrate',
@@ -328,9 +657,13 @@ export interface NormalizeProfileInput {
  */
 export function normalizeProfile(input: NormalizeProfileInput): ProjectProfile {
   const { project, partials, existingManifest, existingTeam, existingSources } = input;
+  logger.info('Normalizing profile', { projectId: project.id, partialsCount: partials.length });
 
   // Merge stack from all partials
   const stack = mergeStack(partials);
+
+  // Calculate stack health based on dependency freshness
+  const stackHealth = calculateStackHealth(stack);
 
   // Build data sources used for governance
   const dataSourcesUsed = partials.map(p => ({
@@ -339,6 +672,14 @@ export function normalizeProfile(input: NormalizeProfileInput): ProjectProfile {
     lastFetched: p.fetchedAt,
   }));
 
+  // Build governance with completeness
+  const governance: IFXGovernance = {
+    ...getDefaultGovernance(),
+    dataSourcesUsed,
+    lastProfileValidation: new Date().toISOString(),
+    profileCompletenessScore: 0, // Will be calculated after profile is built
+  };
+
   // Build profile
   const profile: ProjectProfile = {
     project,
@@ -346,21 +687,23 @@ export function normalizeProfile(input: NormalizeProfileInput): ProjectProfile {
     scouting: getDefaultScoutingConfig(),
     sources: existingSources ?? [],
     stack,
-    stackHealth: getDefaultStackHealth(),
+    stackHealth,
     manifest: existingManifest
       ? { ...getDefaultManifest(), ...existingManifest }
       : getDefaultManifest(),
     cfFindings: getDefaultCFFindings(),
     costTracking: getDefaultCostTracking(),
-    governance: {
-      ...getDefaultGovernance(),
-      dataSourcesUsed,
-    },
+    governance,
   };
 
-  // Calculate completeness
-  profile.governance.profileCompletenessScore = calculateProfileCompleteness(profile);
-  profile.governance.lastProfileValidation = new Date().toISOString();
+  // Calculate completeness and update governance
+  governance.profileCompletenessScore = calculateProfileCompleteness(profile);
+
+  logger.info('Profile normalized', {
+    projectId: project.id,
+    completeness: governance.profileCompletenessScore,
+    healthScore: stackHealth.overallScore,
+  });
 
   return profile;
 }
@@ -372,6 +715,11 @@ export function updateProfileWithPartials(
   existingProfile: ProjectProfile,
   newPartials: PartialProjectProfile[]
 ): ProjectProfile {
+  logger.info('Updating profile with new partials', {
+    projectId: existingProfile.project.id,
+    newPartialsCount: newPartials.length,
+  });
+
   // Merge new stack data with existing
   const combinedPartials: PartialProjectProfile[] = [
     // Create a pseudo-partial from existing profile
@@ -385,6 +733,9 @@ export function updateProfileWithPartials(
 
   const mergedStack = mergeStack(combinedPartials);
 
+  // Recalculate stack health with new data
+  const stackHealth = calculateStackHealth(mergedStack);
+
   // Update data sources
   const newDataSources = newPartials.map(p => ({
     source: `${p.source}_api`,
@@ -392,21 +743,32 @@ export function updateProfileWithPartials(
     lastFetched: p.fetchedAt,
   }));
 
+  const existingDataSources = existingProfile.governance?.dataSourcesUsed ?? [];
+
+  // Build new governance object
+  const governance: IFXGovernance = {
+    ifxVersion: existingProfile.governance?.ifxVersion ?? '1.0',
+    kqrVersion: existingProfile.governance?.kqrVersion ?? '1.0',
+    profileCompletenessScore: 0, // Will be calculated
+    dataSourcesUsed: [...existingDataSources, ...newDataSources],
+    lastProfileValidation: new Date().toISOString(),
+  };
+
   const updatedProfile: ProjectProfile = {
     ...existingProfile,
     stack: mergedStack,
-    governance: {
-      ...existingProfile.governance,
-      dataSourcesUsed: [
-        ...existingProfile.governance.dataSourcesUsed,
-        ...newDataSources,
-      ],
-      lastProfileValidation: new Date().toISOString(),
-    },
+    stackHealth,
+    governance,
   };
 
   // Recalculate completeness
-  updatedProfile.governance.profileCompletenessScore = calculateProfileCompleteness(updatedProfile);
+  governance.profileCompletenessScore = calculateProfileCompleteness(updatedProfile);
+
+  logger.info('Profile updated', {
+    projectId: existingProfile.project.id,
+    newCompleteness: governance.profileCompletenessScore,
+    newHealthScore: stackHealth.overallScore,
+  });
 
   return updatedProfile;
 }
@@ -432,21 +794,36 @@ export function validateProfile(profile: ProjectProfile): {
     warnings.push('No languages detected. Profile may be incomplete.');
   }
 
-  if (profile.manifest.objectives.length === 0) {
+  if (!profile.manifest?.objectives || profile.manifest.objectives.length === 0) {
     warnings.push('No objectives defined. This helps with matching relevance.');
   }
 
-  if (profile.manifest.painPoints.length === 0) {
+  if (!profile.manifest?.painPoints || profile.manifest.painPoints.length === 0) {
     warnings.push('No pain points defined. Recommendations may be less targeted.');
   }
 
-  if (profile.governance.profileCompletenessScore < 0.5) {
-    warnings.push(`Profile completeness is low (${profile.governance.profileCompletenessScore}). Consider adding more details.`);
+  const completeness = profile.governance?.profileCompletenessScore ?? 0;
+  if (completeness < 0.5) {
+    warnings.push(`Profile completeness is low (${completeness}). Consider adding more details.`);
   }
 
-  return {
+  const result = {
     valid: errors.length === 0,
     errors,
     warnings,
   };
+
+  logger.debug('Profile validation result', {
+    projectId: profile.project.id,
+    valid: result.valid,
+    errorCount: errors.length,
+    warningCount: warnings.length,
+  });
+
+  return result;
 }
+
+/**
+ * Export calculateStackHealth for use by other modules.
+ */
+export { calculateStackHealth };

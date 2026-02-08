@@ -8,6 +8,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import 'dotenv/config';
+import { logger } from '../lib/logger';
 
 // ============================================================
 // ENVIRONMENT VALIDATION
@@ -104,16 +105,23 @@ export async function checkDatabaseHealth(): Promise<{
 }
 
 /**
- * Handle Supabase errors consistently
+ * Handle Supabase errors consistently.
+ * Logs the error and returns a formatted Error object.
  */
-export function handleSupabaseError(error: unknown): Error {
+export function handleSupabaseError(error: unknown, context?: string): Error {
   if (error && typeof error === 'object' && 'message' in error) {
-    const supabaseError = error as { message: string; code?: string };
-    return new Error(
-      `Supabase error: ${supabaseError.message}${supabaseError.code ? ` (code: ${supabaseError.code})` : ''}`
-    );
+    const supabaseError = error as { message: string; code?: string; details?: string };
+    const message = `Supabase error: ${supabaseError.message}${supabaseError.code ? ` (code: ${supabaseError.code})` : ''}`;
+    logger.error(message, {
+      context,
+      code: supabaseError.code,
+      details: supabaseError.details
+    });
+    return new Error(message);
   }
-  return new Error('Unknown Supabase error');
+  const message = 'Unknown Supabase error';
+  logger.error(message, { context, error });
+  return new Error(message);
 }
 
 // ============================================================

@@ -6,6 +6,7 @@
  */
 
 import { supabase, getAdminClient, handleSupabaseError } from './client';
+import { logger } from '../lib/logger';
 import type {
   ProjectEntity,
   ProjectSourceEntity,
@@ -118,13 +119,20 @@ export async function updateProject(id: string, updates: Partial<CreateProjectIn
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  logger.info('Deleting project', { id });
   const { error } = await supabase
     .from('projects')
     .delete()
     .eq('id', id);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'deleteProject');
 }
+
+/**
+ * Aliases for consistency with user-requested naming.
+ */
+export const getProject = getProjectById;
+export const listProjects = getProjectsByOwner;
 
 // ============================================================
 // PROJECT SOURCES
@@ -169,8 +177,14 @@ export async function updateProjectSourceLastScan(id: string, lastScan: string):
     .update({ last_scan: lastScan })
     .eq('id', id);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'updateProjectSourceLastScan');
 }
+
+/**
+ * Aliases for consistency with user-requested naming.
+ */
+export const addSource = createProjectSource;
+export const getSources = getProjectSources;
 
 // ============================================================
 // PROJECT TEAM
@@ -257,10 +271,16 @@ export async function getProjectStack(projectId: string): Promise<ProjectStackEn
 
   if (error) {
     if (error.code === 'PGRST116') return null;
-    throw handleSupabaseError(error);
+    throw handleSupabaseError(error, 'getProjectStack');
   }
   return data as ProjectStackEntity;
 }
+
+/**
+ * Aliases for consistency with user-requested naming.
+ */
+export const upsertStack = upsertProjectStack;
+export const getStack = getProjectStack;
 
 // ============================================================
 // PROJECT MANIFEST
@@ -488,8 +508,13 @@ export async function markFeedItemProcessed(id: string): Promise<void> {
     })
     .eq('id', id);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'markFeedItemProcessed');
 }
+
+/**
+ * Alias for consistency with user-requested naming.
+ */
+export const addFeedItem = createFeedItem;
 
 export async function getFeedItemByContentHash(contentHash: string): Promise<FeedItemEntity | null> {
   const { data, error } = await supabase
@@ -500,9 +525,89 @@ export async function getFeedItemByContentHash(contentHash: string): Promise<Fee
 
   if (error) {
     if (error.code === 'PGRST116') return null;
-    throw handleSupabaseError(error);
+    throw handleSupabaseError(error, 'getFeedItemByContentHash');
   }
   return data as FeedItemEntity;
+}
+
+/**
+ * Get feed items with optional filters for ecosystem, date range, and source.
+ */
+export interface GetFeedItemsFilters {
+  ecosystems?: string[];
+  technologies?: string[];
+  categories?: string[];
+  sourceTiers?: string[];
+  sourceNames?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  isProcessed?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getFeedItems(filters: GetFeedItemsFilters = {}): Promise<FeedItemEntity[]> {
+  logger.debug('getFeedItems called', { filters });
+
+  let query = supabase
+    .from('feed_items')
+    .select('*')
+    .order('published_at', { ascending: false });
+
+  // Filter by ecosystems (language_ecosystems array contains any of the provided values)
+  if (filters.ecosystems && filters.ecosystems.length > 0) {
+    query = query.overlaps('language_ecosystems', filters.ecosystems);
+  }
+
+  // Filter by technologies
+  if (filters.technologies && filters.technologies.length > 0) {
+    query = query.overlaps('technologies', filters.technologies);
+  }
+
+  // Filter by categories
+  if (filters.categories && filters.categories.length > 0) {
+    query = query.overlaps('categories', filters.categories);
+  }
+
+  // Filter by source tier
+  if (filters.sourceTiers && filters.sourceTiers.length > 0) {
+    query = query.in('source_tier', filters.sourceTiers);
+  }
+
+  // Filter by source name
+  if (filters.sourceNames && filters.sourceNames.length > 0) {
+    query = query.in('source_name', filters.sourceNames);
+  }
+
+  // Date range filter
+  if (filters.dateFrom) {
+    query = query.gte('published_at', filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    query = query.lte('published_at', filters.dateTo);
+  }
+
+  // Processing status filter
+  if (filters.isProcessed !== undefined) {
+    query = query.eq('is_processed', filters.isProcessed);
+  }
+
+  // Pagination
+  if (filters.limit) {
+    query = query.limit(filters.limit);
+  }
+  if (filters.offset) {
+    query = query.range(filters.offset, filters.offset + (filters.limit ?? 100) - 1);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw handleSupabaseError(error, 'getFeedItems');
+  }
+
+  logger.debug('getFeedItems returned', { count: data?.length ?? 0 });
+  return data as FeedItemEntity[];
 }
 
 // ============================================================
@@ -596,8 +701,13 @@ export async function markRecommendationDelivered(
     })
     .eq('id', id);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'markRecommendationDelivered');
 }
+
+/**
+ * Alias for consistency with user-requested naming.
+ */
+export const getRecommendations = getProjectRecommendations;
 
 // ============================================================
 // RECOMMENDATION FEEDBACK
@@ -655,8 +765,13 @@ export async function recordAdoption(
     })
     .eq('recommendation_id', recommendationId);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'recordAdoption');
 }
+
+/**
+ * Alias for consistency with user-requested naming.
+ */
+export const updateRecommendationFeedback = updateFeedbackStatus;
 
 // ============================================================
 // MIGRATION JOBS
@@ -693,12 +808,90 @@ export async function updateMigrationJobStatus(
   id: string,
   status: string
 ): Promise<void> {
+  logger.info('Updating migration job status', { id, status });
   const { error } = await supabase
     .from('migration_jobs')
     .update({ status })
     .eq('id', id);
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'updateMigrationJobStatus');
+}
+
+export interface UpdateMigrationJobInput {
+  status?: string;
+  branchName?: string;
+  createdFromSha?: string;
+  backupCommitSha?: string;
+  plan?: Record<string, unknown>;
+  planStatus?: string;
+  planApprovedBy?: string;
+  planApprovedAt?: string;
+  execution?: Record<string, unknown>;
+  testing?: Record<string, unknown>;
+  report?: Record<string, unknown>;
+  prUrl?: string;
+  prNumber?: number;
+  prStatus?: string;
+  humanReviewStatus?: string;
+  reviewer?: string;
+  reviewedAt?: string;
+  reviewComments?: string;
+  mergedAt?: string;
+  mergedBy?: string;
+  mergeSha?: string;
+  safetyStopped?: boolean;
+  safetyStopReason?: string;
+  safetyStopAtStep?: number;
+  startedAt?: string;
+  completedAt?: string;
+  durationMinutes?: number;
+}
+
+export async function updateMigrationJob(
+  id: string,
+  input: UpdateMigrationJobInput
+): Promise<MigrationJobEntity> {
+  logger.info('Updating migration job', { id, fields: Object.keys(input) });
+
+  const updateData: Record<string, unknown> = {};
+
+  if (input.status !== undefined) updateData.status = input.status;
+  if (input.branchName !== undefined) updateData.branch_name = input.branchName;
+  if (input.createdFromSha !== undefined) updateData.created_from_sha = input.createdFromSha;
+  if (input.backupCommitSha !== undefined) updateData.backup_commit_sha = input.backupCommitSha;
+  if (input.plan !== undefined) updateData.plan = input.plan;
+  if (input.planStatus !== undefined) updateData.plan_status = input.planStatus;
+  if (input.planApprovedBy !== undefined) updateData.plan_approved_by = input.planApprovedBy;
+  if (input.planApprovedAt !== undefined) updateData.plan_approved_at = input.planApprovedAt;
+  if (input.execution !== undefined) updateData.execution = input.execution;
+  if (input.testing !== undefined) updateData.testing = input.testing;
+  if (input.report !== undefined) updateData.report = input.report;
+  if (input.prUrl !== undefined) updateData.pr_url = input.prUrl;
+  if (input.prNumber !== undefined) updateData.pr_number = input.prNumber;
+  if (input.prStatus !== undefined) updateData.pr_status = input.prStatus;
+  if (input.humanReviewStatus !== undefined) updateData.human_review_status = input.humanReviewStatus;
+  if (input.reviewer !== undefined) updateData.reviewer = input.reviewer;
+  if (input.reviewedAt !== undefined) updateData.reviewed_at = input.reviewedAt;
+  if (input.reviewComments !== undefined) updateData.review_comments = input.reviewComments;
+  if (input.mergedAt !== undefined) updateData.merged_at = input.mergedAt;
+  if (input.mergedBy !== undefined) updateData.merged_by = input.mergedBy;
+  if (input.mergeSha !== undefined) updateData.merge_sha = input.mergeSha;
+  if (input.safetyStopped !== undefined) updateData.safety_stopped = input.safetyStopped;
+  if (input.safetyStopReason !== undefined) updateData.safety_stop_reason = input.safetyStopReason;
+  if (input.safetyStopAtStep !== undefined) updateData.safety_stop_at_step = input.safetyStopAtStep;
+  if (input.startedAt !== undefined) updateData.started_at = input.startedAt;
+  if (input.completedAt !== undefined) updateData.completed_at = input.completedAt;
+  if (input.durationMinutes !== undefined) updateData.duration_minutes = input.durationMinutes;
+
+  const { data, error } = await supabase
+    .from('migration_jobs')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw handleSupabaseError(error, 'updateMigrationJob');
+  return data as MigrationJobEntity;
 }
 
 export async function getMigrationJob(id: string): Promise<MigrationJobEntity | null> {
@@ -730,6 +923,8 @@ export interface CreateAuditLogInput {
 }
 
 export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditLogEntity> {
+  logger.info('Appending audit log', { action: input.action, actor: input.actor });
+
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('audit_log')
@@ -745,9 +940,14 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditL
     .select()
     .single();
 
-  if (error) throw handleSupabaseError(error);
+  if (error) throw handleSupabaseError(error, 'createAuditLog');
   return data as AuditLogEntity;
 }
+
+/**
+ * Alias for createAuditLog - append-only audit log entry.
+ */
+export const appendAuditLog = createAuditLog;
 
 export async function getAuditLogForJob(migrationJobId: string): Promise<AuditLogEntity[]> {
   const { data, error } = await supabase

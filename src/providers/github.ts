@@ -15,6 +15,7 @@
  */
 
 import { Octokit } from 'octokit';
+import { logger } from '../lib/logger';
 import type {
   PartialProjectProfile,
   ProjectStack,
@@ -56,6 +57,37 @@ interface GoMod {
   require?: Array<{ path: string; version: string }>;
 }
 
+interface Gemfile {
+  gems: Array<{ name: string; version?: string; group?: string }>;
+}
+
+interface ComposerJson {
+  name?: string;
+  require?: Record<string, string>;
+  requireDev?: Record<string, string>;
+}
+
+// ============================================================
+// ALLOWED MANIFEST FILES (NEVER SOURCE CODE)
+// ============================================================
+
+const ALLOWED_MANIFEST_FILES = [
+  'package.json',
+  'package-lock.json',
+  'requirements.txt',
+  'pyproject.toml',
+  'Pipfile',
+  'Cargo.toml',
+  'go.mod',
+  'go.sum',
+  'Gemfile',
+  'Gemfile.lock',
+  'composer.json',
+  'composer.lock',
+] as const;
+
+type ManifestFileName = typeof ALLOWED_MANIFEST_FILES[number];
+
 // ============================================================
 // GITHUB CLIENT
 // ============================================================
@@ -66,9 +98,12 @@ function getOctokit(): Octokit {
   if (!octokit) {
     const token = process.env.GITHUB_TOKEN;
     if (!token) {
-      throw new Error('GITHUB_TOKEN environment variable is required');
+      const error = 'GITHUB_TOKEN environment variable is required';
+      logger.error(error);
+      throw new Error(error);
     }
     octokit = new Octokit({ auth: token });
+    logger.debug('GitHub client initialized');
   }
   return octokit;
 }
@@ -77,14 +112,27 @@ function getOctokit(): Octokit {
 // DEPENDENCY FILE FETCHERS
 // ============================================================
 
+/**
+ * Fetch file content from GitHub.
+ * SECURITY: Only allows fetching files from ALLOWED_MANIFEST_FILES.
+ */
 async function fetchFileContent(
   owner: string,
   repo: string,
   path: string,
   ref?: string
 ): Promise<string | null> {
+  // SECURITY CHECK: Only allow manifest files
+  const fileName = path.split('/').pop() as string;
+  if (!ALLOWED_MANIFEST_FILES.includes(fileName as ManifestFileName)) {
+    logger.warn('Attempted to fetch non-manifest file', { path, fileName });
+    throw new Error(`Security violation: Cannot fetch non-manifest file: ${path}`);
+  }
+
   try {
     const client = getOctokit();
+    logger.debug('Fetching file', { owner, repo, path });
+
     const response = await client.rest.repos.getContent({
       owner,
       repo,
@@ -93,14 +141,17 @@ async function fetchFileContent(
     });
 
     if ('content' in response.data && response.data.type === 'file') {
+      logger.debug('File fetched successfully', { path, size: response.data.size });
       return Buffer.from(response.data.content, 'base64').toString('utf-8');
     }
     return null;
   } catch (error) {
     // File not found is not an error, just means repo doesn't have this file
     if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
+      logger.debug('File not found', { path });
       return null;
     }
+    logger.error('Failed to fetch file', { path, error });
     throw error;
   }
 }
@@ -229,6 +280,70 @@ async function fetchGoMod(
   }
 
   return require.length > 0 ? { require } : null;
+}
+
+async function fetchGemfile(
+  owner: string,
+  repo: string,
+  ref?: string
+): Promise<Gemfile | null> {
+  const content = await fetchFileContent(owner, repo, 'Gemfile', ref);
+  if (!content) return null;
+
+  const gems: Array<{ name: string; version?: string; group?: string }> = [];
+  let currentGroup: string | undefined;
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Match group block
+    const groupMatch = trimmed.match(/^group\s+:(\w+)/);
+    if (groupMatch) {
+      currentGroup = groupMatch[1];
+      continue;
+    }
+
+    // Match end of group
+    if (trimmed === 'end') {
+      currentGroup = undefined;
+      continue;
+    }
+
+    // Match gem 'name', 'version' or gem 'name'
+    const gemMatch = trimmed.match(/^gem\s+['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]+)['"])?/);
+    if (gemMatch) {
+      gems.push({
+        name: gemMatch[1],
+        version: gemMatch[2],
+        group: currentGroup,
+      });
+    }
+  }
+
+  return gems.length > 0 ? { gems } : null;
+}
+
+async function fetchComposerJson(
+  owner: string,
+  repo: string,
+  ref?: string
+): Promise<ComposerJson | null> {
+  const content = await fetchFileContent(owner, repo, 'composer.json', ref);
+  if (!content) return null;
+
+  try {
+    const parsed = JSON.parse(content);
+    return {
+      name: parsed.name,
+      require: parsed.require,
+      requireDev: parsed['require-dev'],
+    };
+  } catch {
+    logger.warn(`Failed to parse composer.json for ${owner}/${repo}`);
+    return null;
+  }
 }
 
 // ============================================================
@@ -374,123 +489,357 @@ function extractKeyDependencies(
 }
 
 // ============================================================
-// MAIN PROVIDER FUNCTION
+// PUBLIC API FUNCTIONS
 // ============================================================
 
 /**
- * Fetch project profile data from a GitHub repository.
- * Returns a partial profile that can be merged with other providers.
+ * Repository metadata returned by fetchRepoMetadata.
  */
-export async function fetchGitHubProjectProfile(
-  input: GitHubRepoInput
-): Promise<PartialProjectProfile> {
-  const { owner, name, branch } = input;
+export interface RepoMetadata {
+  id: number;
+  fullName: string;
+  description: string | null;
+  topics: string[];
+  defaultBranch: string;
+  visibility: string;
+  createdAt: string;
+  updatedAt: string;
+  pushedAt: string;
+  stargazersCount: number;
+  forksCount: number;
+  languages: Record<string, number>;
+  languageBreakdown: LanguageInfo[];
+}
+
+/**
+ * Fetch repository metadata: languages, topics, default branch.
+ * Does NOT fetch any source code.
+ */
+export async function fetchRepoMetadata(
+  owner: string,
+  repo: string
+): Promise<RepoMetadata> {
+  logger.info('Fetching repo metadata', { owner, repo });
   const client = getOctokit();
 
-  // Fetch repository metadata
-  const repoResponse = await client.rest.repos.get({
-    owner,
-    repo: name,
-  });
-
-  const repo = repoResponse.data;
+  // Fetch repo info
+  const repoResponse = await client.rest.repos.get({ owner, repo });
+  const repoData = repoResponse.data;
 
   // Fetch language breakdown
-  const languagesResponse = await client.rest.repos.listLanguages({
-    owner,
-    repo: name,
-  });
-
+  const languagesResponse = await client.rest.repos.listLanguages({ owner, repo });
   const languagesData = languagesResponse.data;
   const totalBytes = Object.values(languagesData).reduce((a, b) => a + b, 0);
 
-  const languages: LanguageInfo[] = Object.entries(languagesData)
+  const languageBreakdown: LanguageInfo[] = Object.entries(languagesData)
     .map(([lang, bytes], index) => ({
       name: lang,
-      percentage: Math.round((bytes / totalBytes) * 1000) / 10,
+      percentage: totalBytes > 0 ? Math.round((bytes / totalBytes) * 1000) / 10 : 0,
       role: (index === 0 ? 'primary' : index === 1 ? 'secondary' : 'config') as 'primary' | 'secondary' | 'config' | 'scripting',
     }))
-    .slice(0, 5); // Top 5 languages
+    .slice(0, 10);
 
-  // Fetch dependency files in parallel
-  const ref = branch ?? repo.default_branch;
+  logger.info('Repo metadata fetched', {
+    owner,
+    repo,
+    languages: Object.keys(languagesData).length,
+    topics: repoData.topics?.length ?? 0,
+  });
 
-  const [packageJson, requirements, pyproject, cargo, goMod] = await Promise.all([
-    fetchPackageJson(owner, name, ref),
-    fetchRequirementsTxt(owner, name, ref),
-    fetchPyprojectToml(owner, name, ref),
-    fetchCargoToml(owner, name, ref),
-    fetchGoMod(owner, name, ref),
+  return {
+    id: repoData.id,
+    fullName: repoData.full_name,
+    description: repoData.description,
+    topics: repoData.topics ?? [],
+    defaultBranch: repoData.default_branch,
+    visibility: repoData.visibility ?? 'public',
+    createdAt: repoData.created_at,
+    updatedAt: repoData.updated_at,
+    pushedAt: repoData.pushed_at,
+    stargazersCount: repoData.stargazers_count,
+    forksCount: repoData.forks_count,
+    languages: languagesData,
+    languageBreakdown,
+  };
+}
+
+/**
+ * Dependency files fetched from a repository.
+ */
+export interface DependencyFiles {
+  packageJson: PackageJson | null;
+  requirements: RequirementsTxt | null;
+  pyproject: string[] | null;
+  cargo: CargoToml | null;
+  goMod: GoMod | null;
+  gemfile: Gemfile | null;
+  composerJson: ComposerJson | null;
+}
+
+/**
+ * Fetch ONLY manifest/dependency files from a repository.
+ * NEVER fetches source code files.
+ */
+export async function fetchDependencyFiles(
+  owner: string,
+  repo: string,
+  ref?: string
+): Promise<DependencyFiles> {
+  logger.info('Fetching dependency files', { owner, repo, ref });
+
+  // Fetch all manifest files in parallel
+  const [packageJson, requirements, pyproject, cargo, goMod, gemfile, composerJson] = await Promise.all([
+    fetchPackageJson(owner, repo, ref),
+    fetchRequirementsTxt(owner, repo, ref),
+    fetchPyprojectToml(owner, repo, ref),
+    fetchCargoToml(owner, repo, ref),
+    fetchGoMod(owner, repo, ref),
+    fetchGemfile(owner, repo, ref),
+    fetchComposerJson(owner, repo, ref),
   ]);
 
-  // Determine ecosystems present
+  const filesFound = [
+    packageJson && 'package.json',
+    requirements && 'requirements.txt',
+    pyproject && 'pyproject.toml',
+    cargo && 'Cargo.toml',
+    goMod && 'go.mod',
+    gemfile && 'Gemfile',
+    composerJson && 'composer.json',
+  ].filter(Boolean);
+
+  logger.info('Dependency files fetched', { owner, repo, files: filesFound });
+
+  return { packageJson, requirements, pyproject, cargo, goMod, gemfile, composerJson };
+}
+
+/**
+ * Parsed dependencies for a single ecosystem.
+ */
+export interface EcosystemDependencies {
+  ecosystem: DependencyEcosystem;
+  direct: Array<{ name: string; version: string }>;
+  dev: Array<{ name: string; version: string }>;
+}
+
+/**
+ * All parsed dependencies from dependency files.
+ */
+export interface ParsedDependencies {
+  ecosystems: DependencyEcosystem[];
+  byEcosystem: EcosystemDependencies[];
+  frameworks: FrameworkInfo[];
+  keyDependencies: KeyDependency[];
+  summary: {
+    totalDirect: number;
+    totalDev: number;
+    ecosystemCount: number;
+  };
+}
+
+/**
+ * Parse dependencies from fetched dependency files.
+ * Extracts direct + dev dependencies per ecosystem.
+ */
+export function parseDependencies(files: DependencyFiles): ParsedDependencies {
+  logger.debug('Parsing dependencies');
+
+  const byEcosystem: EcosystemDependencies[] = [];
   const ecosystems: DependencyEcosystem[] = [];
-  if (packageJson) ecosystems.push('npm');
-  if (requirements || pyproject) ecosystems.push('pip');
-  if (cargo) ecosystems.push('cargo');
-  if (goMod) ecosystems.push('go');
 
-  // Detect frameworks
-  const frameworks = detectFrameworks(packageJson);
+  // Parse npm (package.json)
+  if (files.packageJson) {
+    ecosystems.push('npm');
+    const direct: Array<{ name: string; version: string }> = [];
+    const dev: Array<{ name: string; version: string }> = [];
 
-  // Collect all Python packages
-  const pythonPackages: string[] = [
-    ...(requirements?.packages.map(p => p.name) ?? []),
-    ...(pyproject ?? []),
-  ];
+    for (const [name, version] of Object.entries(files.packageJson.dependencies ?? {})) {
+      direct.push({ name, version: version.replace(/^[^0-9]*/, '') });
+    }
+    for (const [name, version] of Object.entries(files.packageJson.devDependencies ?? {})) {
+      dev.push({ name, version: version.replace(/^[^0-9]*/, '') });
+    }
+
+    byEcosystem.push({ ecosystem: 'npm', direct, dev });
+  }
+
+  // Parse pip (requirements.txt + pyproject.toml)
+  const pythonDeps: Array<{ name: string; version: string }> = [];
+  if (files.requirements) {
+    for (const pkg of files.requirements.packages) {
+      pythonDeps.push({ name: pkg.name, version: pkg.version ?? 'unknown' });
+    }
+  }
+  if (files.pyproject) {
+    for (const name of files.pyproject) {
+      if (!pythonDeps.find(d => d.name.toLowerCase() === name.toLowerCase())) {
+        pythonDeps.push({ name, version: 'unknown' });
+      }
+    }
+  }
+  if (pythonDeps.length > 0) {
+    ecosystems.push('pip');
+    byEcosystem.push({ ecosystem: 'pip', direct: pythonDeps, dev: [] });
+  }
+
+  // Parse cargo (Cargo.toml)
+  if (files.cargo) {
+    ecosystems.push('cargo');
+    const direct: Array<{ name: string; version: string }> = [];
+    const dev: Array<{ name: string; version: string }> = [];
+
+    for (const [name, version] of Object.entries(files.cargo.dependencies ?? {})) {
+      const v = typeof version === 'string' ? version : version.version;
+      direct.push({ name, version: v });
+    }
+    for (const [name, version] of Object.entries(files.cargo.devDependencies ?? {})) {
+      const v = typeof version === 'string' ? version : version.version;
+      dev.push({ name, version: v });
+    }
+
+    byEcosystem.push({ ecosystem: 'cargo', direct, dev });
+  }
+
+  // Parse go (go.mod)
+  if (files.goMod?.require) {
+    ecosystems.push('go');
+    const direct = files.goMod.require.map(r => ({ name: r.path, version: r.version }));
+    byEcosystem.push({ ecosystem: 'go', direct, dev: [] });
+  }
+
+  // Parse ruby (Gemfile)
+  if (files.gemfile) {
+    ecosystems.push('gems');
+    const direct: Array<{ name: string; version: string }> = [];
+    const dev: Array<{ name: string; version: string }> = [];
+
+    for (const gem of files.gemfile.gems) {
+      const dep = { name: gem.name, version: gem.version ?? 'unknown' };
+      if (gem.group === 'development' || gem.group === 'test') {
+        dev.push(dep);
+      } else {
+        direct.push(dep);
+      }
+    }
+
+    byEcosystem.push({ ecosystem: 'gems', direct, dev });
+  }
+
+  // Parse composer (composer.json) - uses 'other' as ecosystem type
+  if (files.composerJson) {
+    ecosystems.push('other'); // composer maps to 'other' in DependencyEcosystem
+    const direct: Array<{ name: string; version: string }> = [];
+    const dev: Array<{ name: string; version: string }> = [];
+
+    for (const [name, version] of Object.entries(files.composerJson.require ?? {})) {
+      if (!name.startsWith('php') && !name.startsWith('ext-')) {
+        direct.push({ name, version: version.replace(/^[^0-9]*/, '') });
+      }
+    }
+    for (const [name, version] of Object.entries(files.composerJson.requireDev ?? {})) {
+      dev.push({ name, version: version.replace(/^[^0-9]*/, '') });
+    }
+
+    byEcosystem.push({ ecosystem: 'other', direct, dev });
+  }
+
+  // Detect frameworks from all ecosystems
+  const frameworks = detectFrameworks(files.packageJson);
 
   // Add Python frameworks
-  for (const pkg of pythonPackages) {
-    const framework = FRAMEWORK_PATTERNS[pkg.toLowerCase()];
+  for (const dep of pythonDeps) {
+    const framework = FRAMEWORK_PATTERNS[dep.name.toLowerCase()];
     if (framework) {
       frameworks.push({
         name: framework.name,
-        version: 'unknown',
+        version: dep.version,
         category: framework.category as 'frontend' | 'backend' | 'styling' | 'testing' | 'build' | 'other',
       });
     }
   }
 
   // Extract key dependencies
-  const keyDependencies = extractKeyDependencies(packageJson, pythonPackages);
+  const keyDependencies = extractKeyDependencies(
+    files.packageJson,
+    pythonDeps.map(d => d.name)
+  );
 
-  // Calculate dependency counts
-  const npmDeps = packageJson ? {
-    direct: Object.keys(packageJson.dependencies ?? {}).length,
-    dev: Object.keys(packageJson.devDependencies ?? {}).length,
-    packages: Object.keys(packageJson.dependencies ?? {}).slice(0, 10),
-  } : undefined;
+  // Calculate summary
+  const totalDirect = byEcosystem.reduce((sum, e) => sum + e.direct.length, 0);
+  const totalDev = byEcosystem.reduce((sum, e) => sum + e.dev.length, 0);
 
-  const pipDeps = pythonPackages.length > 0 ? {
-    direct: pythonPackages.length,
-    dev: 0,
-    packages: pythonPackages.slice(0, 10),
-  } : undefined;
+  logger.info('Dependencies parsed', {
+    ecosystems,
+    totalDirect,
+    totalDev,
+    frameworks: frameworks.length,
+    keyDependencies: keyDependencies.length,
+  });
 
-  const cargoDeps = cargo?.dependencies ? {
-    direct: Object.keys(cargo.dependencies).length,
-    dev: Object.keys(cargo.devDependencies ?? {}).length,
-    packages: Object.keys(cargo.dependencies).slice(0, 10),
-  } : undefined;
+  return {
+    ecosystems,
+    byEcosystem,
+    frameworks,
+    keyDependencies,
+    summary: {
+      totalDirect,
+      totalDev,
+      ecosystemCount: ecosystems.length,
+    },
+  };
+}
 
-  const goDeps = goMod?.require ? {
-    direct: goMod.require.length,
-    dev: 0,
-    packages: goMod.require.map(r => r.path).slice(0, 10),
-  } : undefined;
+// ============================================================
+// MAIN PROVIDER FUNCTION
+// ============================================================
+
+/**
+ * Fetch project profile data from a GitHub repository.
+ * Returns a partial profile that can be merged with other providers.
+ *
+ * Uses the public API functions internally for cleaner separation.
+ */
+export async function fetchGitHubProjectProfile(
+  input: GitHubRepoInput
+): Promise<PartialProjectProfile> {
+  const { owner, name, branch } = input;
+  logger.info('Fetching GitHub project profile', { owner, repo: name, branch });
+
+  // Fetch metadata first to get default branch
+  const metadata = await fetchRepoMetadata(owner, name);
+  const ref = branch ?? metadata.defaultBranch;
+
+  // Fetch dependency files
+  const files = await fetchDependencyFiles(owner, name, ref);
+
+  // Parse dependencies
+  const parsed = parseDependencies(files);
+
+  // Build allDependencies summary
+  const allDependencies: Record<string, { direct: number; dev: number; packages: string[] }> = {};
+  for (const eco of parsed.byEcosystem) {
+    allDependencies[eco.ecosystem] = {
+      direct: eco.direct.length,
+      dev: eco.dev.length,
+      packages: eco.direct.slice(0, 10).map(d => d.name),
+    };
+  }
 
   // Build stack
   const stack: Partial<ProjectStack> = {
-    languages,
-    frameworks,
-    keyDependencies,
-    allDependencies: {
-      ...(npmDeps && { npm: npmDeps }),
-      ...(pipDeps && { pip: pipDeps }),
-      ...(cargoDeps && { cargo: cargoDeps }),
-      ...(goDeps && { go: goDeps }),
-    },
+    languages: metadata.languageBreakdown,
+    frameworks: parsed.frameworks,
+    keyDependencies: parsed.keyDependencies,
+    allDependencies,
   };
+
+  logger.info('GitHub project profile fetched', {
+    owner,
+    repo: name,
+    languages: metadata.languageBreakdown.length,
+    frameworks: parsed.frameworks.length,
+    ecosystems: parsed.ecosystems,
+  });
 
   // Return partial profile
   return {
@@ -498,25 +847,19 @@ export async function fetchGitHubProjectProfile(
     fetchedAt: new Date().toISOString(),
     stack,
     rawMetadata: {
-      repoId: repo.id,
-      fullName: repo.full_name,
-      description: repo.description,
-      topics: repo.topics,
-      defaultBranch: repo.default_branch,
-      visibility: repo.visibility,
-      createdAt: repo.created_at,
-      updatedAt: repo.updated_at,
-      pushedAt: repo.pushed_at,
-      stargazersCount: repo.stargazers_count,
-      forksCount: repo.forks_count,
+      repoId: metadata.id,
+      fullName: metadata.fullName,
+      description: metadata.description,
+      topics: metadata.topics,
+      defaultBranch: metadata.defaultBranch,
+      visibility: metadata.visibility,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
+      pushedAt: metadata.pushedAt,
+      stargazersCount: metadata.stargazersCount,
+      forksCount: metadata.forksCount,
     },
-    rawDependencies: {
-      packageJson,
-      requirements,
-      pyproject,
-      cargo,
-      goMod,
-    },
+    rawDependencies: files as unknown as Record<string, unknown>,
   };
 }
 
