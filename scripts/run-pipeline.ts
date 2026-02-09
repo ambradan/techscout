@@ -26,13 +26,18 @@ import { randomUUID } from 'crypto';
 import { preFilterBatch } from '../src/matching/prefilter';
 import { evaluateMaturityBatch } from '../src/matching/maturity';
 import { runMatchingPipeline } from '../src/matching';
+import {
+  detectBreakingChanges,
+  renderAlertsMarkdown,
+  formatAlertsForDelivery,
+} from '../src/matching/breaking-change';
 
 // L4 Delivery
 import { generateTechnicalBrief, renderTechnicalBriefMarkdown } from '../src/delivery/technical-brief';
 import { generateHumanBrief, renderHumanBriefMarkdown } from '../src/delivery/human-brief';
 
 // Types
-import type { ProjectProfile, FeedItem, Recommendation } from '../src/types';
+import type { ProjectProfile, FeedItem, Recommendation, BreakingChangeAlert } from '../src/types';
 
 // ============================================================
 // CONFIGURATION
@@ -44,6 +49,7 @@ interface PipelineOptions {
   maxFeedItems: number;
   maxRecommendations: number;
   skipFetch: boolean;
+  skipBreakingChange: boolean;
 }
 
 function parseArgs(): PipelineOptions {
@@ -53,6 +59,7 @@ function parseArgs(): PipelineOptions {
     maxFeedItems: 50,
     maxRecommendations: 10,
     skipFetch: false,
+    skipBreakingChange: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -63,6 +70,8 @@ function parseArgs(): PipelineOptions {
       options.dryRun = true;
     } else if (args[i] === '--skip-fetch') {
       options.skipFetch = true;
+    } else if (args[i] === '--skip-breaking-change') {
+      options.skipBreakingChange = true;
     } else if (args[i] === '--max-items' && args[i + 1]) {
       options.maxFeedItems = parseInt(args[i + 1]);
       i++;
@@ -477,6 +486,7 @@ async function runPipeline() {
   console.log(`Dry Run: ${options.dryRun}`);
   console.log(`Max Feed Items: ${options.maxFeedItems}`);
   console.log(`Max Recommendations: ${options.maxRecommendations}`);
+  console.log(`Breaking Change Detection: ${!options.skipBreakingChange}`);
   console.log('='.repeat(60) + '\n');
 
   const startTime = Date.now();
@@ -509,13 +519,110 @@ async function runPipeline() {
       process.exit(0);
     }
 
-    // Stage 3: Run matching
+    // Stage 3: Breaking Change Detection (runs in parallel conceptually, bypasses stability gate)
+    let breakingChangeAlerts: BreakingChangeAlert[] = [];
+    if (!options.skipBreakingChange) {
+      logger.info('Running breaking change detection...');
+
+      // Build profile structure for breaking change detection
+      const projectId = (project as Record<string, unknown>).id as string;
+      const projectName = (project as Record<string, unknown>).name as string || 'Unknown';
+      const admin = getAdminClient();
+
+      const stackResult = await admin.from('project_stack').select('*').eq('project_id', projectId).single();
+      const stack = stackResult.data;
+
+      const bcProfile: ProjectProfile = {
+        project: {
+          id: projectId,
+          name: projectName,
+          slug: (project as Record<string, unknown>).slug as string || 'unknown',
+        },
+        stack: {
+          languages: (stack?.languages || []).map((l: { name: string; percentage?: number; role?: string }) => ({
+            name: l.name.toLowerCase(),
+            percentage: l.percentage || 0,
+            role: l.role || 'secondary',
+          })),
+          frameworks: (stack?.frameworks || []).map((f: { name: string; version?: string }) => ({
+            name: f.name.toLowerCase(),
+            version: f.version,
+          })),
+          databases: (stack?.databases || []).map((d: { name: string; role?: string }) => ({
+            name: d.name.toLowerCase(),
+            role: d.role || 'primary',
+          })),
+          keyDependencies: (stack?.key_dependencies || []).map((k: { name: string; version?: string; ecosystem?: string }) => ({
+            name: k.name.toLowerCase(),
+            version: k.version || '0.0.0',
+            ecosystem: (k.ecosystem || 'npm') as 'npm' | 'pip' | 'cargo' | 'go',
+          })),
+          allDependencies: stack?.all_dependencies || { npm: {}, pip: {} },
+          infrastructure: [],
+          devTools: [],
+        },
+        stackHealth: {
+          overallScore: 0.75,
+          components: {
+            security: { score: 0.8, details: [] },
+            freshness: { score: 0.7, details: [] },
+            maintenance: { score: 0.75, details: [] },
+            complexity: { score: 0.75, details: [] },
+          },
+        },
+        manifest: {
+          objectives: [],
+          painPoints: [],
+          constraints: [],
+        },
+        cfFindings: {
+          findings: [],
+          analyzedAt: new Date().toISOString(),
+        },
+        teamRoles: ['developer_fullstack'],
+        scouting: {
+          enabled: true,
+          focusAreas: ['frontend', 'backend'],
+          excludeCategories: [],
+          maturityFilter: 'early_adopter',
+          maxRecommendations: 5,
+        },
+      };
+
+      const bcResult = await detectBreakingChanges(bcProfile, {
+        checkMajorVersions: true,
+        checkSecurityAdvisories: true,
+        checkEOL: true,
+        maxDependencies: 30,
+      });
+
+      breakingChangeAlerts = bcResult.alerts;
+
+      if (breakingChangeAlerts.length > 0) {
+        console.log('\n' + '='.repeat(60));
+        console.log('BREAKING CHANGE ALERTS');
+        console.log('='.repeat(60));
+        console.log(renderAlertsMarkdown(breakingChangeAlerts));
+
+        const grouped = formatAlertsForDelivery(breakingChangeAlerts);
+        logger.info('Breaking change detection completed', {
+          total: breakingChangeAlerts.length,
+          critical: grouped.critical.length,
+          high: grouped.high.length,
+          other: grouped.other.length,
+        });
+      } else {
+        logger.info('No breaking changes detected');
+      }
+    }
+
+    // Stage 4: Run matching
     const recommendations = await runMatching(project, feedItems, options.maxRecommendations);
 
-    // Stage 4: Generate briefs
+    // Stage 5: Generate briefs
     generateBriefs(project, recommendations);
 
-    // Stage 5: Save to database
+    // Stage 6: Save to database
     await saveRecommendations(recommendations, options.dryRun);
 
     // Summary
@@ -525,6 +632,7 @@ async function runPipeline() {
     console.log('='.repeat(60));
     console.log(`Duration: ${duration}s`);
     console.log(`Feed items processed: ${feedItems.length}`);
+    console.log(`Breaking change alerts: ${breakingChangeAlerts.length}`);
     console.log(`Recommendations generated: ${recommendations.length}`);
     console.log('='.repeat(60) + '\n');
 

@@ -28,6 +28,7 @@ export * from './maturity';
 export * from './analyzer';
 export * from './stability-gate';
 export * from './ranker';
+export * from './breaking-change';
 
 // Import components for orchestration
 import { preFilterBatch, createConfigFromProfile, getPassedItems } from './prefilter';
