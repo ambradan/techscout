@@ -13,7 +13,7 @@
 import 'dotenv/config';
 import { logger } from '../src/lib/logger';
 import { getAdminClient } from '../src/db/client';
-import { createRecommendation } from '../src/db/queries';
+import { createRecommendation, createFeedItem } from '../src/db/queries';
 
 // L2 Feeds
 import { HackerNewsSource } from '../src/feeds/sources/hacker-news';
@@ -155,6 +155,54 @@ async function fetchFeeds(maxItems: number): Promise<FeedItem[]> {
   logger.info('Feed items deduplicated', { before: allItems.length, after: dedupResult.newItems.length });
 
   return dedupResult.newItems;
+}
+
+/**
+ * Stage 2b: Persist feed items to database
+ */
+async function persistFeedItems(items: FeedItem[]): Promise<FeedItem[]> {
+  logger.info('Persisting feed items to database...', { count: items.length });
+
+  const persistedItems: FeedItem[] = [];
+  let stored = 0;
+  let failed = 0;
+
+  for (const item of items) {
+    try {
+      const result = await createFeedItem({
+        sourceName: item.sourceName,
+        sourceTier: item.sourceTier,
+        sourceReliability: item.sourceReliability,
+        externalId: item.externalId,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        contentSummary: item.contentSummary,
+        publishedAt: item.publishedAt,
+        categories: item.categories,
+        technologies: item.technologies,
+        languageEcosystems: item.languageEcosystems,
+        traction: item.traction as Record<string, unknown>,
+        contentHash: item.contentHash,
+      });
+
+      // Use the DB-assigned ID for the item
+      persistedItems.push({
+        ...item,
+        id: result.id,
+      });
+      stored++;
+    } catch (error) {
+      logger.warn('Failed to persist feed item', {
+        title: item.title,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      failed++;
+    }
+  }
+
+  logger.info('Feed items persisted', { stored, failed });
+  return persistedItems;
 }
 
 /**
@@ -420,6 +468,11 @@ async function runPipeline() {
       feedItems = await loadFeedItemsFromDB(options.maxFeedItems);
     } else {
       feedItems = await fetchFeeds(options.maxFeedItems);
+
+      // Persist fetched items to DB so recommendations can reference them
+      if (!options.dryRun && feedItems.length > 0) {
+        feedItems = await persistFeedItems(feedItems);
+      }
     }
 
     if (feedItems.length === 0) {
