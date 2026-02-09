@@ -5,9 +5,11 @@
  * L2 Feeds → L3 Matching → L4 Delivery
  *
  * Usage:
- *   npm run pipeline                     # Uses default seeded project
- *   npm run pipeline -- --project <id>   # Specific project
- *   npm run pipeline -- --dry-run        # Don't save to DB
+ *   npm run pipeline                         # Uses default seeded project
+ *   npm run pipeline -- --project <id>       # Specific project
+ *   npm run pipeline -- --dry-run            # Don't save to DB
+ *   npm run pipeline -- --send-email <addr>  # Send briefs to email
+ *   npm run pipeline -- --email-role tech    # tech or human brief
  */
 
 import 'dotenv/config';
@@ -35,6 +37,11 @@ import {
 // L4 Delivery
 import { generateTechnicalBrief, renderTechnicalBriefMarkdown } from '../src/delivery/technical-brief';
 import { generateHumanBrief, renderHumanBriefMarkdown } from '../src/delivery/human-brief';
+import {
+  deliverTechnicalBrief,
+  deliverHumanBrief,
+  sendBreakingChangeAlerts,
+} from '../src/delivery/email';
 
 // Types
 import type { ProjectProfile, FeedItem, Recommendation, BreakingChangeAlert } from '../src/types';
@@ -50,6 +57,8 @@ interface PipelineOptions {
   maxRecommendations: number;
   skipFetch: boolean;
   skipBreakingChange: boolean;
+  sendEmail?: string;
+  emailRole: 'technical' | 'human';
 }
 
 function parseArgs(): PipelineOptions {
@@ -60,6 +69,7 @@ function parseArgs(): PipelineOptions {
     maxRecommendations: 10,
     skipFetch: false,
     skipBreakingChange: false,
+    emailRole: 'technical',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -74,6 +84,12 @@ function parseArgs(): PipelineOptions {
       options.skipBreakingChange = true;
     } else if (args[i] === '--max-items' && args[i + 1]) {
       options.maxFeedItems = parseInt(args[i + 1]);
+      i++;
+    } else if (args[i] === '--send-email' && args[i + 1]) {
+      options.sendEmail = args[i + 1];
+      i++;
+    } else if (args[i] === '--email-role' && args[i + 1]) {
+      options.emailRole = args[i + 1] === 'human' ? 'human' : 'technical';
       i++;
     }
   }
@@ -487,6 +503,10 @@ async function runPipeline() {
   console.log(`Max Feed Items: ${options.maxFeedItems}`);
   console.log(`Max Recommendations: ${options.maxRecommendations}`);
   console.log(`Breaking Change Detection: ${!options.skipBreakingChange}`);
+  console.log(`Email Delivery: ${options.sendEmail || 'disabled'}`);
+  if (options.sendEmail) {
+    console.log(`Email Role: ${options.emailRole}`);
+  }
   console.log('='.repeat(60) + '\n');
 
   const startTime = Date.now();
@@ -625,6 +645,57 @@ async function runPipeline() {
     // Stage 6: Save to database
     await saveRecommendations(recommendations, options.dryRun);
 
+    // Stage 7: Email delivery (optional)
+    let emailSent = false;
+    if (options.sendEmail && recommendations.length > 0) {
+      const projectId = (project as Record<string, unknown>).id as string;
+      const projectName = (project as Record<string, unknown>).name as string || 'Unknown';
+
+      logger.info('Sending email...', { to: options.sendEmail, role: options.emailRole });
+
+      try {
+        if (options.emailRole === 'technical') {
+          const technicalBrief = generateTechnicalBrief(projectId, recommendations);
+          const result = await deliverTechnicalBrief(
+            technicalBrief,
+            [{ email: options.sendEmail }]
+          );
+          emailSent = result.success;
+          if (result.success) {
+            logger.info('Technical brief email sent', { messageId: result.messageId });
+          } else {
+            logger.error('Email delivery failed', { error: result.error });
+          }
+        } else {
+          const humanBrief = generateHumanBrief(projectId, projectName, recommendations);
+          const result = await deliverHumanBrief(
+            humanBrief,
+            [{ email: options.sendEmail }]
+          );
+          emailSent = result.success;
+          if (result.success) {
+            logger.info('Human brief email sent', { messageId: result.messageId });
+          } else {
+            logger.error('Email delivery failed', { error: result.error });
+          }
+        }
+
+        // Send breaking change alerts if any
+        if (breakingChangeAlerts.length > 0) {
+          const alertResult = await sendBreakingChangeAlerts(
+            (project as Record<string, unknown>).name as string || 'Project',
+            breakingChangeAlerts,
+            [{ email: options.sendEmail }]
+          );
+          if (alertResult.success) {
+            logger.info('Breaking change alert email sent', { messageId: alertResult.messageId });
+          }
+        }
+      } catch (error) {
+        logger.error('Email delivery error', { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
     // Summary
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('\n' + '='.repeat(60));
@@ -634,6 +705,9 @@ async function runPipeline() {
     console.log(`Feed items processed: ${feedItems.length}`);
     console.log(`Breaking change alerts: ${breakingChangeAlerts.length}`);
     console.log(`Recommendations generated: ${recommendations.length}`);
+    if (options.sendEmail) {
+      console.log(`Email sent: ${emailSent ? 'Yes' : 'No'}`);
+    }
     console.log('='.repeat(60) + '\n');
 
   } catch (error) {
