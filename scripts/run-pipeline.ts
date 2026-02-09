@@ -13,7 +13,7 @@
 import 'dotenv/config';
 import { logger } from '../src/lib/logger';
 import { getAdminClient } from '../src/db/client';
-import { getProject, getFeedItems, createRecommendation } from '../src/db/queries';
+import { createRecommendation } from '../src/db/queries';
 
 // L2 Feeds
 import { HackerNewsSource } from '../src/feeds/sources/hacker-news';
@@ -217,6 +217,29 @@ async function runMatching(
     maxRecommendations,
   });
 
+  // Load real data from database (using admin client to bypass RLS)
+  const admin = getAdminClient();
+
+  const [manifestResult, cfFindingsResult, stackHealthResult, stackResult] = await Promise.all([
+    admin.from('project_manifest').select('*').eq('project_id', projectId).single(),
+    admin.from('cf_findings').select('*').eq('project_id', projectId).eq('is_resolved', false),
+    admin.from('stack_health').select('*').eq('project_id', projectId).single(),
+    admin.from('project_stack').select('*').eq('project_id', projectId).single(),
+  ]);
+
+  const manifest = manifestResult.data;
+  const cfFindings = cfFindingsResult.data || [];
+  const stackHealth = stackHealthResult.data;
+  const stack = stackResult.data;
+
+  logger.info('Loaded project data', {
+    hasManifest: !!manifest,
+    cfFindings: cfFindings.length,
+    hasStackHealth: !!stackHealth,
+    hasStack: !!stack,
+    painPoints: manifest?.pain_points?.length ?? 0,
+  });
+
   // Build profile structure expected by matching pipeline
   const profileForMatching = {
     project: {
@@ -225,37 +248,42 @@ async function runMatching(
       slug: (project as Record<string, unknown>).slug as string || 'unknown',
     },
     stack: {
-      languages: [{ name: 'typescript' }, { name: 'javascript' }],
-      frameworks: [{ name: 'node' }, { name: 'react' }, { name: 'express' }],
-      databases: [{ name: 'postgresql' }, { name: 'supabase' }],
-      keyDependencies: [{ name: 'zod' }, { name: 'vitest' }],
-      allDependencies: { npm: [], pip: [] },
+      languages: (stack?.languages || []).map((l: { name: string }) => ({ name: l.name.toLowerCase() })),
+      frameworks: (stack?.frameworks || []).map((f: { name: string }) => ({ name: f.name.toLowerCase() })),
+      databases: (stack?.databases || []).map((d: { name: string }) => ({ name: d.name.toLowerCase() })),
+      keyDependencies: (stack?.key_dependencies || []).map((k: { name: string }) => ({ name: k.name.toLowerCase() })),
+      allDependencies: stack?.all_dependencies || { npm: [], pip: [] },
       infrastructure: [],
       devTools: [],
     },
     stackHealth: {
-      overallScore: 0.75,
+      overallScore: stackHealth?.overall_score ?? 0.75,
       components: {
-        security: { score: 0.8, details: [] },
-        freshness: { score: 0.7, details: [] },
-        maintenance: { score: 0.75, details: [] },
-        complexity: { score: 0.75, details: [] },
+        security: { score: stackHealth?.components?.security?.score ?? 0.8, details: [] },
+        freshness: { score: stackHealth?.components?.freshness?.score ?? 0.7, details: [] },
+        maintenance: { score: stackHealth?.components?.maintenanceRisk?.score ?? 0.75, details: [] },
+        complexity: { score: stackHealth?.components?.complexity?.score ?? 0.75, details: [] },
       },
     },
     manifest: {
-      objectives: ['Improve performance', 'Enhance developer experience'],
-      painPoints: ['Slow build times', 'Complex configuration'],
-      constraints: ['Must maintain backwards compatibility'],
+      objectives: manifest?.objectives || [],
+      painPoints: manifest?.pain_points || [],
+      constraints: manifest?.constraints || [],
     },
     cfFindings: {
-      findings: [],
-      analyzedAt: new Date().toISOString(),
+      findings: cfFindings.map(f => ({
+        id: f.finding_id,
+        severity: f.severity,
+        category: f.category,
+        description: f.description,
+      })),
+      analyzedAt: cfFindings[0]?.scanned_at || new Date().toISOString(),
     },
     teamRoles: ['developer_fullstack', 'pm'] as const,
     scouting: {
       enabled: true,
-      focusAreas: ['frontend', 'backend', 'devops', 'tooling', 'ai', 'database'],
-      excludeCategories: [],
+      focusAreas: (project as Record<string, unknown>).focus_areas as string[] || ['frontend', 'backend', 'devops', 'tooling', 'ai', 'database', 'security'],
+      excludeCategories: (project as Record<string, unknown>).exclude_categories as string[] || [],
       maturityFilter: 'early_adopter' as const,
       maxRecommendations: maxRecommendations,
     },
@@ -286,17 +314,19 @@ function generateBriefs(
 
   logger.info('Generating briefs...', { recommendations: recommendations.length });
 
+  const projectId = (project as Record<string, unknown>).id as string || 'unknown';
+  const projectName = (project as Record<string, unknown>).name as string || 'Unknown Project';
+
   // Generate technical brief
   const technicalBrief = generateTechnicalBrief(
-    project.id,
-    (project as Record<string, unknown>).name as string || 'Project',
+    projectId,
     recommendations
   );
 
   // Generate human brief
   const humanBrief = generateHumanBrief(
-    project.id,
-    (project as Record<string, unknown>).name as string || 'Project',
+    projectId,
+    projectName,
     recommendations
   );
 

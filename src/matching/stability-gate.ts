@@ -273,19 +273,23 @@ export function inferCostOfNoChange(
   technologiesMatched: string[],
   action: RecommendationAction
 ): CostOfNoChange {
-  // Check for relevant CF findings
+  // Check for relevant CF findings (matching technologies)
   const relevantFindings = profile.cfFindings.findings.filter(f => {
-    // Check if finding relates to matched technologies
     const findingText = `${f.patternId} ${f.description}`.toLowerCase();
     return technologiesMatched.some(t => findingText.includes(t.toLowerCase()));
   });
+
+  // CRITICAL/HIGH findings should ALWAYS be considered, regardless of technology match
+  const criticalFindings = profile.cfFindings.findings.filter(f =>
+    f.severity === 'critical' || f.severity === 'high'
+  );
 
   // Aggregate severity from findings
   let securityExposure: RiskLevel = 'none';
   let maintenanceRisk: RiskLevel = 'none';
 
+  // Consider technology-matched findings
   for (const finding of relevantFindings) {
-    // CFFinding uses 'category' field: crypto, auth, compliance, etc.
     if (finding.category === 'security' || finding.category === 'crypto' || finding.category === 'auth') {
       securityExposure = maxRisk(securityExposure, finding.severity as RiskLevel);
     }
@@ -294,10 +298,26 @@ export function inferCostOfNoChange(
     }
   }
 
+  // Critical findings always contribute to security exposure (project-wide risk)
+  for (const finding of criticalFindings) {
+    if (finding.category === 'security' || finding.category === 'crypto' || finding.category === 'auth') {
+      // Critical/high security findings increase noChangeScore even without direct match
+      securityExposure = maxRisk(securityExposure, finding.severity as RiskLevel);
+    }
+  }
+
   // Check stack health for deprecation/maintenance concerns
   const stackHealth = profile.stackHealth;
   let deprecationRisk: RiskLevel = 'none';
   let performanceImpact: RiskLevel = 'none';
+
+  // Low security score is a strong indicator of risk
+  if (stackHealth.components.security.score < 0.5) {
+    securityExposure = maxRisk(securityExposure, 'medium');
+  }
+  if (stackHealth.components.security.score < 0.3) {
+    securityExposure = maxRisk(securityExposure, 'high');
+  }
 
   if (stackHealth.components.freshness.score < 0.5) {
     deprecationRisk = 'medium';
@@ -313,8 +333,11 @@ export function inferCostOfNoChange(
 
   // Build detail string
   const details: string[] = [];
+  if (criticalFindings.length > 0) {
+    details.push(`${criticalFindings.length} finding(s) critico/alto nel progetto`);
+  }
   if (relevantFindings.length > 0) {
-    details.push(`${relevantFindings.length} CF finding(s) rilevanti`);
+    details.push(`${relevantFindings.length} CF finding(s) matching tecnologie`);
   }
   if (deprecationRisk !== 'none') {
     details.push(`Stack freshness basso (${(stackHealth.components.freshness.score * 100).toFixed(0)}%)`);

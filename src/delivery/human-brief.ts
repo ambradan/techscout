@@ -121,16 +121,28 @@ function formatImpactSummary(hf: HumanFriendlyOutput): ImpactSummarySection {
 export function formatHumanRecommendation(
   rec: Recommendation
 ): HumanRecommendationBrief {
+  const hf = rec.humanFriendly || {
+    title: rec.subject?.name || 'Unknown',
+    oneLiner: '',
+    summary: '',
+    whyNow: '',
+    impactSummary: { security: 'none', costo: 'none', rischio: 'none', urgenza: 'none' },
+    clientTalkingPoints: [],
+  };
+  const stability = rec.stabilityAssessment || {
+    verdict: 'DEFER' as const,
+    verdictPlain: 'No assessment available',
+  };
   return {
     id: rec.id,
-    title: rec.humanFriendly.title,
-    oneLiner: rec.humanFriendly.oneLiner,
-    summary: rec.humanFriendly.summary,
-    whyNow: rec.humanFriendly.whyNow,
-    verdict: formatVerdict(rec.stabilityAssessment),
-    impact: formatImpactSummary(rec.humanFriendly),
-    clientTalkingPoints: rec.humanFriendly.clientTalkingPoints,
-    urgency: getUrgencyIndicator(rec.priority, rec.stabilityAssessment.verdict),
+    title: hf.title,
+    oneLiner: hf.oneLiner,
+    summary: hf.summary,
+    whyNow: hf.whyNow,
+    verdict: formatVerdict(stability),
+    impact: formatImpactSummary(hf),
+    clientTalkingPoints: hf.clientTalkingPoints || [],
+    urgency: getUrgencyIndicator(rec.priority, stability.verdict),
   };
 }
 

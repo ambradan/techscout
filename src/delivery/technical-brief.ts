@@ -184,14 +184,15 @@ function formatStability(stability: StabilityAssessment): StabilitySection {
 }
 
 function formatAnalysis(technical: TechnicalOutput): AnalysisSection {
+  const analysis = technical?.analysis || { facts: [], inferences: [], assumptions: [] };
   return {
-    facts: technical.analysis.facts.map(f =>
+    facts: (analysis.facts || []).map(f =>
       `[FACT] ${f.claim} (source: ${f.source}, reliability: ${f.sourceReliability})`
     ),
-    inferences: technical.analysis.inferences.map(i =>
-      `[INFERENCE] ${i.claim} (confidence: ${(i.confidence * 100).toFixed(0)}%, derived from: ${i.derivedFrom.join(', ')})`
+    inferences: (analysis.inferences || []).map(i =>
+      `[INFERENCE] ${i.claim} (confidence: ${(i.confidence * 100).toFixed(0)}%, derived from: ${(i.derivedFrom || []).join(', ')})`
     ),
-    assumptions: technical.analysis.assumptions.map(a =>
+    assumptions: (analysis.assumptions || []).map(a =>
       `[ASSUMPTION] ${a.claim}`
     ),
   };
