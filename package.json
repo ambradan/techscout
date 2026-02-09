@@ -9,6 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "seed": "tsx scripts/seed-project.ts",
     "pipeline": "tsx scripts/run-pipeline.ts",
+    "scheduled": "tsx scripts/scheduled-run.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
