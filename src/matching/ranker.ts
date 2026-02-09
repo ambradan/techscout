@@ -23,7 +23,7 @@ import { calculateConfidence } from '../lib/kqr';
 import { logger } from '../lib/logger';
 import type { AnalyzerOutput } from './analyzer';
 import type { PreFilterMatch } from '../types';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 
 // ============================================================
 // CONFIGURATION
@@ -288,7 +288,7 @@ export function buildRecommendation(input: RankerInput): RankedRecommendation {
   }
 
   const recommendation: RankedRecommendation = {
-    id: nanoid(),
+    id: randomUUID(),
     ifxTraceId: traceId,
     projectId: profile.project.id,
     feedItemId: item.id,

@@ -20,7 +20,7 @@ import { HackerNewsSource } from '../src/feeds/sources/hacker-news';
 import { GitHubTrendingSource } from '../src/feeds/sources/github-trending';
 import { normalizeItems } from '../src/feeds/normalizer';
 import { deduplicateInMemory } from '../src/feeds/dedup';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 
 // L3 Matching
 import { preFilterBatch } from '../src/matching/prefilter';
@@ -147,7 +147,7 @@ async function fetchFeeds(maxItems: number): Promise<FeedItem[]> {
   // Assign IDs and deduplicate
   for (const item of allItems) {
     if (!item.id) {
-      item.id = nanoid();
+      item.id = randomUUID();
     }
   }
 

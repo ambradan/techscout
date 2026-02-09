@@ -5,7 +5,7 @@
  * Uses content hashing and URL matching.
  */
 
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 import type { FeedItem } from '../types';
 import { getFeedItemByContentHash, createFeedItem } from '../db/queries';
 import { logger } from '../lib/logger';
@@ -55,7 +55,7 @@ export async function deduplicateAgainstDb(items: FeedItem[]): Promise<DedupResu
       // Assign a new ID
       newItems.push({
         ...item,
-        id: nanoid(),
+        id: randomUUID(),
       });
     }
   }
@@ -96,7 +96,7 @@ export function deduplicateInMemory(items: FeedItem[]): DedupResult {
 
   const newItems = Array.from(seen.values()).map(item => ({
     ...item,
-    id: item.id || nanoid(),
+    id: item.id || randomUUID(),
   }));
 
   return {
