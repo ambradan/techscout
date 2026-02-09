@@ -72,18 +72,33 @@ interface ComposerJson {
 // ============================================================
 
 const ALLOWED_MANIFEST_FILES = [
+  // JavaScript/TypeScript
   'package.json',
   'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  // Python
   'requirements.txt',
   'pyproject.toml',
   'Pipfile',
+  // Rust
   'Cargo.toml',
+  // Go
   'go.mod',
   'go.sum',
+  // Ruby
   'Gemfile',
   'Gemfile.lock',
+  // PHP
   'composer.json',
   'composer.lock',
+  // Dart/Flutter
+  'pubspec.yaml',
+  // Java/Kotlin
+  'build.gradle',
+  'pom.xml',
+  // Elixir
+  'mix.exs',
 ] as const;
 
 type ManifestFileName = typeof ALLOWED_MANIFEST_FILES[number];
