@@ -5,11 +5,13 @@
  * L2 Feeds → L3 Matching → L4 Delivery
  *
  * Usage:
- *   npm run pipeline                         # Uses default seeded project
- *   npm run pipeline -- --project <id>       # Specific project
- *   npm run pipeline -- --dry-run            # Don't save to DB
- *   npm run pipeline -- --send-email <addr>  # Send briefs to email
- *   npm run pipeline -- --email-role tech    # tech or human brief
+ *   npm run pipeline                              # Uses default seeded project
+ *   npm run pipeline -- --project <id>            # Specific project
+ *   npm run pipeline -- --dry-run                 # Don't save to DB
+ *   npm run pipeline -- --send-email <addr>       # Send briefs to email
+ *   npm run pipeline -- --email-role tech|human   # tech or human brief (email)
+ *   npm run pipeline -- --send-slack #channel     # Send briefs to Slack channel
+ *   npm run pipeline -- --slack-role tech|human   # tech or human brief (Slack)
  */
 
 import 'dotenv/config';
@@ -42,6 +44,11 @@ import {
   deliverHumanBrief,
   sendBreakingChangeAlerts,
 } from '../src/delivery/email';
+import {
+  deliverTechnicalBriefToSlack,
+  deliverHumanBriefToSlack,
+  sendBreakingChangeAlertsToSlack,
+} from '../src/delivery/slack';
 
 // Types
 import type { ProjectProfile, FeedItem, Recommendation, BreakingChangeAlert } from '../src/types';
@@ -59,6 +66,8 @@ interface PipelineOptions {
   skipBreakingChange: boolean;
   sendEmail?: string;
   emailRole: 'technical' | 'human';
+  sendSlack?: string; // Channel name (e.g., '#techscout')
+  slackRole: 'technical' | 'human';
 }
 
 function parseArgs(): PipelineOptions {
@@ -70,6 +79,7 @@ function parseArgs(): PipelineOptions {
     skipFetch: false,
     skipBreakingChange: false,
     emailRole: 'technical',
+    slackRole: 'technical',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -90,6 +100,12 @@ function parseArgs(): PipelineOptions {
       i++;
     } else if (args[i] === '--email-role' && args[i + 1]) {
       options.emailRole = args[i + 1] === 'human' ? 'human' : 'technical';
+      i++;
+    } else if (args[i] === '--send-slack' && args[i + 1]) {
+      options.sendSlack = args[i + 1];
+      i++;
+    } else if (args[i] === '--slack-role' && args[i + 1]) {
+      options.slackRole = args[i + 1] === 'human' ? 'human' : 'technical';
       i++;
     }
   }
@@ -507,6 +523,10 @@ async function runPipeline() {
   if (options.sendEmail) {
     console.log(`Email Role: ${options.emailRole}`);
   }
+  console.log(`Slack Delivery: ${options.sendSlack || 'disabled'}`);
+  if (options.sendSlack) {
+    console.log(`Slack Role: ${options.slackRole}`);
+  }
   console.log('='.repeat(60) + '\n');
 
   const startTime = Date.now();
@@ -696,6 +716,57 @@ async function runPipeline() {
       }
     }
 
+    // Stage 8: Slack delivery (optional)
+    let slackSent = false;
+    if (options.sendSlack && recommendations.length > 0) {
+      const projectId = (project as Record<string, unknown>).id as string;
+      const projectName = (project as Record<string, unknown>).name as string || 'Unknown';
+
+      logger.info('Sending to Slack...', { channel: options.sendSlack, role: options.slackRole });
+
+      try {
+        if (options.slackRole === 'technical') {
+          const technicalBrief = generateTechnicalBrief(projectId, recommendations);
+          const result = await deliverTechnicalBriefToSlack(
+            technicalBrief,
+            options.sendSlack
+          );
+          slackSent = result.success;
+          if (result.success) {
+            logger.info('Technical brief sent to Slack', { channel: result.channel, ts: result.ts });
+          } else {
+            logger.error('Slack delivery failed', { error: result.error });
+          }
+        } else {
+          const humanBrief = generateHumanBrief(projectId, projectName, recommendations);
+          const result = await deliverHumanBriefToSlack(
+            humanBrief,
+            options.sendSlack
+          );
+          slackSent = result.success;
+          if (result.success) {
+            logger.info('Human brief sent to Slack', { channel: result.channel, ts: result.ts });
+          } else {
+            logger.error('Slack delivery failed', { error: result.error });
+          }
+        }
+
+        // Send breaking change alerts if any
+        if (breakingChangeAlerts.length > 0) {
+          const alertResult = await sendBreakingChangeAlertsToSlack(
+            (project as Record<string, unknown>).name as string || 'Project',
+            breakingChangeAlerts,
+            options.sendSlack
+          );
+          if (alertResult.success) {
+            logger.info('Breaking change alerts sent to Slack', { channel: alertResult.channel });
+          }
+        }
+      } catch (error) {
+        logger.error('Slack delivery error', { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
     // Summary
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('\n' + '='.repeat(60));
@@ -707,6 +778,9 @@ async function runPipeline() {
     console.log(`Recommendations generated: ${recommendations.length}`);
     if (options.sendEmail) {
       console.log(`Email sent: ${emailSent ? 'Yes' : 'No'}`);
+    }
+    if (options.sendSlack) {
+      console.log(`Slack sent: ${slackSent ? 'Yes' : 'No'}`);
     }
     console.log('='.repeat(60) + '\n');
 

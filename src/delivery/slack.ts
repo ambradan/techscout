@@ -8,6 +8,7 @@
 import { logger } from '../lib/logger';
 import type { TechnicalBrief } from './technical-brief';
 import type { HumanBrief, HumanRecommendationBrief } from './human-brief';
+import type { BreakingChangeAlert } from '../types';
 
 // ============================================================
 // TYPES
@@ -299,9 +300,10 @@ export function buildTechnicalBriefSlackMessage(
 
   // Top 3 recommendations
   for (const rec of brief.recommendations.slice(0, 3)) {
-    const icon = rec.classification.priority === 'CRITICAL' ? ':red_circle:'
-      : rec.classification.priority === 'HIGH' ? ':large_orange_circle:'
-      : rec.classification.priority === 'MEDIUM' ? ':large_yellow_circle:'
+    const priority = rec.classification.priority.toLowerCase();
+    const icon = priority === 'critical' ? ':red_circle:'
+      : priority === 'high' ? ':large_orange_circle:'
+      : priority === 'medium' ? ':large_yellow_circle:'
       : ':large_blue_circle:';
 
     blocks.push(section(
@@ -478,6 +480,83 @@ export async function sendBreakingChangeAlertToSlack(
     summary,
     severity
   );
+  message.channel = channel;
+  return sendSlackMessage(message, config);
+}
+
+/**
+ * Build Slack message for multiple breaking change alerts.
+ */
+export function buildBreakingChangeAlertsSlackMessage(
+  projectName: string,
+  alerts: BreakingChangeAlert[]
+): SlackMessage {
+  const blocks: SlackBlock[] = [];
+
+  const criticalCount = alerts.filter(a => a.severity === 'critical').length;
+  const highCount = alerts.filter(a => a.severity === 'high').length;
+
+  const headerIcon = criticalCount > 0 ? ':rotating_light:' : ':warning:';
+
+  blocks.push(header(`${headerIcon} ${alerts.length} Breaking Change Alert${alerts.length > 1 ? 's' : ''}`));
+  blocks.push(section(`*Project:* ${projectName}`));
+
+  if (criticalCount > 0 || highCount > 0) {
+    const parts: string[] = [];
+    if (criticalCount > 0) parts.push(`*${criticalCount}* critical`);
+    if (highCount > 0) parts.push(`*${highCount}* high`);
+    blocks.push(context([parts.join(' | ')]));
+  }
+
+  blocks.push(divider());
+
+  // Show each alert (limit to 10 to avoid Slack block limits)
+  for (const alert of alerts.slice(0, 10)) {
+    const icon = alert.severity === 'critical' ? ':red_circle:'
+      : alert.severity === 'high' ? ':large_orange_circle:'
+      : ':large_yellow_circle:';
+
+    const versionInfo = alert.subject.newVersion
+      ? `\`${alert.subject.currentVersion}\` → \`${alert.subject.newVersion}\``
+      : `\`${alert.subject.currentVersion}\``;
+
+    blocks.push(section(
+      `${icon} *${alert.subject.name}*\n` +
+      `${versionInfo}\n` +
+      `_${alert.humanSummary}_`
+    ));
+  }
+
+  if (alerts.length > 10) {
+    blocks.push(context([`... and ${alerts.length - 10} more alerts`]));
+  }
+
+  blocks.push(divider());
+  blocks.push(context([`Generated: ${new Date().toLocaleString()}`]));
+
+  return {
+    text: `${alerts.length} Breaking Change Alert${alerts.length > 1 ? 's' : ''} for ${projectName}`,
+    blocks,
+  };
+}
+
+/**
+ * Send multiple breaking change alerts to Slack.
+ */
+export async function sendBreakingChangeAlertsToSlack(
+  projectName: string,
+  alerts: BreakingChangeAlert[],
+  channel?: string,
+  config?: Partial<SlackConfig>
+): Promise<SlackResult> {
+  if (alerts.length === 0) {
+    return {
+      success: true,
+      sentAt: new Date().toISOString(),
+    };
+  }
+
+  const message = buildBreakingChangeAlertsSlackMessage(projectName, alerts);
   message.channel = channel;
   return sendSlackMessage(message, config);
 }
