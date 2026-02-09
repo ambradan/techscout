@@ -12,6 +12,7 @@
  *   npm run pipeline -- --email-role tech|human   # tech or human brief (email)
  *   npm run pipeline -- --send-slack #channel     # Send briefs to Slack channel
  *   npm run pipeline -- --slack-role tech|human   # tech or human brief (Slack)
+ *   npm run pipeline -- --export-pdf              # Export briefs as PDF to storage
  */
 
 import 'dotenv/config';
@@ -49,6 +50,10 @@ import {
   deliverHumanBriefToSlack,
   sendBreakingChangeAlertsToSlack,
 } from '../src/delivery/slack';
+import {
+  exportAndUploadTechnicalBriefPDF,
+  exportAndUploadHumanBriefPDF,
+} from '../src/delivery/export';
 
 // Types
 import type { ProjectProfile, FeedItem, Recommendation, BreakingChangeAlert } from '../src/types';
@@ -68,6 +73,7 @@ interface PipelineOptions {
   emailRole: 'technical' | 'human';
   sendSlack?: string; // Channel name (e.g., '#techscout')
   slackRole: 'technical' | 'human';
+  exportPdf: boolean;
 }
 
 function parseArgs(): PipelineOptions {
@@ -80,6 +86,7 @@ function parseArgs(): PipelineOptions {
     skipBreakingChange: false,
     emailRole: 'technical',
     slackRole: 'technical',
+    exportPdf: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -107,6 +114,8 @@ function parseArgs(): PipelineOptions {
     } else if (args[i] === '--slack-role' && args[i + 1]) {
       options.slackRole = args[i + 1] === 'human' ? 'human' : 'technical';
       i++;
+    } else if (args[i] === '--export-pdf') {
+      options.exportPdf = true;
     }
   }
 
@@ -527,6 +536,7 @@ async function runPipeline() {
   if (options.sendSlack) {
     console.log(`Slack Role: ${options.slackRole}`);
   }
+  console.log(`PDF Export: ${options.exportPdf ? 'enabled' : 'disabled'}`);
   console.log('='.repeat(60) + '\n');
 
   const startTime = Date.now();
@@ -767,6 +777,48 @@ async function runPipeline() {
       }
     }
 
+    // Stage 9: PDF export (optional)
+    let pdfExported = false;
+    if (options.exportPdf && recommendations.length > 0) {
+      const projectId = (project as Record<string, unknown>).id as string;
+      const projectName = (project as Record<string, unknown>).name as string || 'Unknown';
+
+      logger.info('Exporting briefs to PDF...');
+
+      try {
+        // Generate and upload technical brief PDF
+        const technicalBrief = generateTechnicalBrief(projectId, recommendations);
+        const techResult = await exportAndUploadTechnicalBriefPDF(technicalBrief);
+
+        if (techResult.success) {
+          logger.info('Technical brief PDF exported', {
+            filePath: techResult.filePath,
+            archiveId: techResult.archiveId,
+            size: techResult.fileSize,
+          });
+          pdfExported = true;
+        } else {
+          logger.error('Technical PDF export failed', { error: techResult.error });
+        }
+
+        // Generate and upload human brief PDF
+        const humanBrief = generateHumanBrief(projectId, projectName, recommendations);
+        const humanResult = await exportAndUploadHumanBriefPDF(humanBrief);
+
+        if (humanResult.success) {
+          logger.info('Human brief PDF exported', {
+            filePath: humanResult.filePath,
+            archiveId: humanResult.archiveId,
+            size: humanResult.fileSize,
+          });
+        } else {
+          logger.error('Human PDF export failed', { error: humanResult.error });
+        }
+      } catch (error) {
+        logger.error('PDF export error', { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
     // Summary
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('\n' + '='.repeat(60));
@@ -781,6 +833,9 @@ async function runPipeline() {
     }
     if (options.sendSlack) {
       console.log(`Slack sent: ${slackSent ? 'Yes' : 'No'}`);
+    }
+    if (options.exportPdf) {
+      console.log(`PDF exported: ${pdfExported ? 'Yes' : 'No'}`);
     }
     console.log('='.repeat(60) + '\n');
 
