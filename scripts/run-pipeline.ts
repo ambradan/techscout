@@ -158,17 +158,20 @@ async function fetchFeeds(maxItems: number): Promise<FeedItem[]> {
 }
 
 /**
- * Stage 2b: Persist feed items to database
+ * Stage 2b: Persist feed items to database (get-or-create pattern)
  */
 async function persistFeedItems(items: FeedItem[]): Promise<FeedItem[]> {
   logger.info('Persisting feed items to database...', { count: items.length });
 
+  const admin = getAdminClient();
   const persistedItems: FeedItem[] = [];
-  let stored = 0;
+  let created = 0;
+  let existing = 0;
   let failed = 0;
 
   for (const item of items) {
     try {
+      // Try to insert the item
       const result = await createFeedItem({
         sourceName: item.sourceName,
         sourceTier: item.sourceTier,
@@ -191,17 +194,42 @@ async function persistFeedItems(items: FeedItem[]): Promise<FeedItem[]> {
         ...item,
         id: result.id,
       });
-      stored++;
+      created++;
     } catch (error) {
+      // Check if it's a duplicate key error (23505)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('23505') || errorMessage.includes('duplicate key')) {
+        // Item already exists - look it up by source_name + external_id
+        try {
+          const { data: existingItem } = await admin
+            .from('feed_items')
+            .select('id')
+            .eq('source_name', item.sourceName)
+            .eq('external_id', item.externalId)
+            .single();
+
+          if (existingItem) {
+            persistedItems.push({
+              ...item,
+              id: existingItem.id,
+            });
+            existing++;
+            continue;
+          }
+        } catch {
+          // Lookup failed
+        }
+      }
+
       logger.warn('Failed to persist feed item', {
         title: item.title,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
       failed++;
     }
   }
 
-  logger.info('Feed items persisted', { stored, failed });
+  logger.info('Feed items persisted', { created, existing, failed, total: persistedItems.length });
   return persistedItems;
 }
 
