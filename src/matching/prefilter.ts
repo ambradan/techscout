@@ -19,6 +19,7 @@ import type {
   PreFilterBatchResult,
 } from '../types';
 import { logger } from '../lib/logger';
+import { loadProjectWeights, calculateCombinedWeight } from '../feedback/learning';
 
 // ============================================================
 // CONFIGURATION
@@ -305,18 +306,48 @@ export function preFilterItem(
 
 /**
  * Pre-filter a batch of items against a project profile.
+ * Optionally applies learned weights from feedback history.
  */
 export function preFilterBatch(
   items: FeedItem[],
   profile: ProjectProfile,
-  config: PreFilterConfig = DEFAULT_CONFIG
+  config: PreFilterConfig = DEFAULT_CONFIG,
+  learnedWeights?: Map<string, number>
 ): PreFilterBatchResult {
   const matches: PreFilterMatch[] = [];
   let passed = 0;
   let rejected = 0;
 
   for (const item of items) {
-    const match = preFilterItem(item, profile, config);
+    let match = preFilterItem(item, profile, config);
+
+    // Apply learned weights if available
+    if (learnedWeights && learnedWeights.size > 0 && match.passedFilter) {
+      const weightMultiplier = calculateCombinedWeight(
+        learnedWeights,
+        item.source,
+        item.categories,
+        item.technologies
+      );
+
+      // Apply weight to match score
+      const adjustedScore = Math.min(1, match.matchScore * weightMultiplier);
+      match = {
+        ...match,
+        matchScore: Math.round(adjustedScore * 100) / 100,
+      };
+
+      // Log significant weight adjustments
+      if (Math.abs(weightMultiplier - 1.0) > 0.1) {
+        logger.debug('Applied learned weight adjustment', {
+          feedItemId: item.id,
+          originalScore: match.matchScore,
+          adjustedScore,
+          weightMultiplier,
+        });
+      }
+    }
+
     matches.push(match);
 
     if (match.passedFilter) {
@@ -338,6 +369,7 @@ export function preFilterBatch(
     passed,
     rejected,
     output: sortedMatches.length,
+    learnedWeightsApplied: learnedWeights ? learnedWeights.size : 0,
   });
 
   return {
