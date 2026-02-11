@@ -29,7 +29,7 @@ export function ProjectDetailPage() {
 
   // Filters
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [deliveryFilter, setDeliveryFilter] = useState<string>('all');
   const [expandedRec, setExpandedRec] = useState<string | null>(null);
   const [briefView, setBriefView] = useState<'technical' | 'human'>('technical');
 
@@ -138,7 +138,7 @@ export function ProjectDetailPage() {
 
   function getActionBadge(action: string) {
     const classes: Record<string, string> = {
-      REPLACE: 'badge-replace',
+      REPLACE_EXISTING: 'badge-replace',
       COMPLEMENT: 'badge-complement',
       NEW_CAPABILITY: 'badge-new',
       MONITOR: 'badge-monitor',
@@ -148,9 +148,12 @@ export function ProjectDetailPage() {
 
   const filteredRecs = recommendations.filter((rec) => {
     if (priorityFilter !== 'all' && rec.priority !== priorityFilter) return false;
-    if (statusFilter !== 'all' && rec.status !== statusFilter) return false;
+    if (deliveryFilter === 'pending' && rec.is_delivered) return false;
+    if (deliveryFilter === 'delivered' && !rec.is_delivered) return false;
     return true;
   });
+
+  const pendingCount = recommendations.filter(r => !r.is_delivered).length;
 
   if (loading) {
     return (
@@ -177,9 +180,6 @@ export function ProjectDetailPage() {
           <span>/</span>
         </div>
         <h1 className="text-lg font-semibold text-zinc-900">{project.name}</h1>
-        {project.description && (
-          <p className="text-sm text-zinc-500 mt-1">{project.description}</p>
-        )}
       </div>
 
       {/* Tabs */}
@@ -191,9 +191,9 @@ export function ProjectDetailPage() {
             className={`tab whitespace-nowrap ${activeTab === tab ? 'tab-active' : ''}`}
           >
             {tab === 'breaking' ? 'Breaking Changes' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            {tab === 'recommendations' && recommendations.filter(r => r.status === 'pending').length > 0 && (
+            {tab === 'recommendations' && pendingCount > 0 && (
               <span className="ml-1.5 badge badge-accent">
-                {recommendations.filter(r => r.status === 'pending').length}
+                {pendingCount}
               </span>
             )}
           </button>
@@ -228,16 +228,13 @@ export function ProjectDetailPage() {
               <option value="info">Info</option>
             </select>
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={deliveryFilter}
+              onChange={(e) => setDeliveryFilter(e.target.value)}
               className="input w-auto"
             >
-              <option value="all">All Status</option>
+              <option value="all">All</option>
               <option value="pending">Pending</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="implemented">Implemented</option>
+              <option value="delivered">Delivered</option>
             </select>
           </div>
 
@@ -273,8 +270,8 @@ export function ProjectDetailPage() {
                       <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
                         <span>Confidence: {Math.round(rec.confidence * 100)}%</span>
                         <span>Verdict: {rec.stability_assessment.verdict}</span>
-                        <span className={`badge ${rec.status === 'pending' ? 'badge-accent' : 'badge-info'}`}>
-                          {rec.status}
+                        <span className={`badge ${!rec.is_delivered ? 'badge-accent' : 'badge-info'}`}>
+                          {rec.is_delivered ? 'Delivered' : 'Pending'}
                         </span>
                       </div>
                     </div>
@@ -308,10 +305,10 @@ export function ProjectDetailPage() {
 
                       {briefView === 'technical' ? (
                         <div className="text-sm space-y-2">
-                          <p className="text-zinc-600">{rec.human_friendly.oneLiner}</p>
+                          <p className="text-zinc-600">{rec.human_friendly.one_liner}</p>
                           <div>
                             <span className="text-xs font-medium text-zinc-500">Effort:</span>
-                            <span className="ml-2 text-zinc-700">{rec.technical.effort.calibratedEstimateDays} days</span>
+                            <span className="ml-2 text-zinc-700">{rec.technical.effort.calibrated_estimate_days} days</span>
                             <span className="ml-2 badge badge-info">{rec.technical.effort.complexity}</span>
                           </div>
                         </div>
@@ -352,7 +349,7 @@ export function ProjectDetailPage() {
                 <tr key={item.id}>
                   <td>
                     <a
-                      href={item.url}
+                      href={item.url || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-zinc-900 hover:text-blue-600"
@@ -374,7 +371,7 @@ export function ProjectDetailPage() {
                     {item.traction.npmWeeklyDownloads && `${(item.traction.npmWeeklyDownloads / 1000).toFixed(0)}k/w`}
                   </td>
                   <td className="text-xs text-zinc-500">
-                    {new Date(item.published_at).toLocaleDateString()}
+                    {item.published_at ? new Date(item.published_at).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
@@ -410,9 +407,9 @@ export function ProjectDetailPage() {
                 <tbody>
                   {briefs.map((brief) => (
                     <tr key={brief.id}>
-                      <td className="capitalize">{brief.brief_type}</td>
-                      <td className="uppercase text-xs">{brief.file_format}</td>
-                      <td>{brief.recommendations_included.length}</td>
+                      <td className="capitalize">{brief.brief_type.replace('_', ' ')}</td>
+                      <td className="uppercase text-xs">{brief.format}</td>
+                      <td>{brief.recommendation_count}</td>
                       <td className="text-xs text-zinc-500">
                         {new Date(brief.created_at).toLocaleDateString()}
                       </td>
@@ -437,7 +434,7 @@ function OverviewTab({
   stack,
   health,
   findings,
-  manifest: _manifest, // Available for future use (objectives, pain_points, etc.)
+  manifest: _manifest,
 }: {
   project: Project;
   stack: ProjectStack | null;
@@ -517,8 +514,8 @@ function OverviewTab({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-zinc-500">Maturity Filter</span>
-            <span className="text-zinc-700 capitalize">{project.maturity_filter.replace('_', ' ')}</span>
+            <span className="text-zinc-500">Frequency</span>
+            <span className="text-zinc-700 capitalize">{project.scouting_frequency}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-zinc-500">Max Recommendations</span>

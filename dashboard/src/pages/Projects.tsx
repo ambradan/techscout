@@ -12,7 +12,7 @@ export function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewProjectForm, setShowNewProjectForm] = useState(false);
-  const [newProject, setNewProject] = useState({ name: '', description: '', repo_url: '' });
+  const [newProject, setNewProject] = useState({ name: '', repo_url: '' });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,12 +41,12 @@ export function ProjectsPage() {
             .eq('project_id', project.id)
             .single();
 
-          // Get pending recommendations count
+          // Get undelivered recommendations count (is_delivered = false)
           const { count } = await supabase
             .from('recommendations')
             .select('*', { count: 'exact', head: true })
             .eq('project_id', project.id)
-            .eq('status', 'pending');
+            .eq('is_delivered', false);
 
           return {
             ...project,
@@ -92,7 +92,7 @@ export function ProjectsPage() {
 
       if (insertError) throw insertError;
 
-      setNewProject({ name: '', description: '', repo_url: '' });
+      setNewProject({ name: '', repo_url: '' });
       setShowNewProjectForm(false);
       loadProjects();
     } catch (err) {
@@ -162,16 +162,6 @@ export function ProjectsPage() {
               />
             </div>
             <div>
-              <label className="label">Description (optional)</label>
-              <input
-                type="text"
-                value={newProject.description}
-                onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                className="input"
-                placeholder="Brief description"
-              />
-            </div>
-            <div>
               <label className="label">GitHub Repository URL (optional)</label>
               <input
                 type="url"
@@ -197,7 +187,7 @@ export function ProjectsPage() {
                 type="button"
                 onClick={() => {
                   setShowNewProjectForm(false);
-                  setNewProject({ name: '', description: '', repo_url: '' });
+                  setNewProject({ name: '', repo_url: '' });
                 }}
                 className="btn btn-secondary"
               >
@@ -235,11 +225,6 @@ export function ProjectsPage() {
                     >
                       {project.name}
                     </Link>
-                    {project.description && (
-                      <div className="text-xs text-zinc-500 truncate max-w-xs">
-                        {project.description}
-                      </div>
-                    )}
                   </td>
                   <td>
                     {project.stackHealth ? (
@@ -267,7 +252,7 @@ export function ProjectsPage() {
                   </td>
                   <td className="text-xs text-zinc-500">
                     {project.stackHealth
-                      ? formatDate(project.stackHealth.calculated_at)
+                      ? formatDate(project.stackHealth.last_calculated)
                       : 'Never'}
                   </td>
                   <td className="text-center">

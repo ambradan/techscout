@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Recommendation, Project, RecommendationFeedback } from '../lib/types';
 
-type FeedbackType = 'USEFUL' | 'NOT_RELEVANT' | 'ALREADY_KNEW' | 'ADOPTED' | 'DISMISSED';
+type FeedbackStatus = 'useful' | 'not_relevant' | 'already_knew' | 'adopted' | 'dismissed';
 
 export function RecommendationDetailPage() {
   const { id, recId } = useParams<{ id: string; recId: string }>();
@@ -39,10 +39,10 @@ export function RecommendationDetailPage() {
     }
   }
 
-  async function submitFeedback(feedbackType: FeedbackType) {
+  async function submitFeedback(feedbackStatus: FeedbackStatus) {
     if (!rec) return;
 
-    if (feedbackType === 'ADOPTED') {
+    if (feedbackStatus === 'adopted') {
       setShowAdoptionForm(true);
       return;
     }
@@ -54,13 +54,13 @@ export function RecommendationDetailPage() {
 
       await supabase.from('recommendation_feedback').insert({
         recommendation_id: rec.id,
-        user_id: user.user.id,
-        feedback_type: feedbackType,
+        status: feedbackStatus,
+        submitted_by: user.user.id,
+        submitted_at: new Date().toISOString(),
       });
 
-      // Update recommendation status
-      const newStatus = feedbackType === 'USEFUL' || feedbackType === 'ALREADY_KNEW' ? 'reviewed' : 'rejected';
-      await supabase.from('recommendations').update({ status: newStatus }).eq('id', rec.id);
+      // Mark recommendation as delivered
+      await supabase.from('recommendations').update({ is_delivered: true }).eq('id', rec.id);
 
       loadData();
     } catch (err) {
@@ -80,13 +80,15 @@ export function RecommendationDetailPage() {
 
       await supabase.from('recommendation_feedback').insert({
         recommendation_id: rec.id,
-        user_id: user.user.id,
-        feedback_type: 'ADOPTED',
-        adoption_actual_days: adoptionDays ? parseInt(adoptionDays) : null,
-        notes: adoptionNotes || null,
+        status: 'adopted',
+        submitted_by: user.user.id,
+        submitted_at: new Date().toISOString(),
+        actual_days: adoptionDays ? parseInt(adoptionDays) : null,
+        adoption_notes: adoptionNotes || null,
+        adopted_at: new Date().toISOString(),
       });
 
-      await supabase.from('recommendations').update({ status: 'implemented' }).eq('id', rec.id);
+      await supabase.from('recommendations').update({ is_delivered: true }).eq('id', rec.id);
 
       setShowAdoptionForm(false);
       loadData();
@@ -113,6 +115,16 @@ export function RecommendationDetailPage() {
     );
   }
 
+  const getActionBadgeClass = (action: string) => {
+    const classes: Record<string, string> = {
+      REPLACE_EXISTING: 'badge-replace',
+      COMPLEMENT: 'badge-complement',
+      NEW_CAPABILITY: 'badge-new',
+      MONITOR: 'badge-monitor',
+    };
+    return classes[action] || 'badge-info';
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-4xl">
       {/* Breadcrumb */}
@@ -128,12 +140,12 @@ export function RecommendationDetailPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <h1 className="text-lg font-semibold text-zinc-900">{rec.subject.name}</h1>
-          <span className={`badge badge-${rec.action === 'REPLACE' ? 'replace' : rec.action === 'COMPLEMENT' ? 'complement' : rec.action === 'NEW_CAPABILITY' ? 'new' : 'monitor'}`}>
+          <span className={`badge ${getActionBadgeClass(rec.action)}`}>
             {rec.action.replace('_', ' ')}
           </span>
           <span className={`badge badge-${rec.priority}`}>{rec.priority}</span>
         </div>
-        <p className="text-sm text-zinc-600">{rec.human_friendly.oneLiner}</p>
+        <p className="text-sm text-zinc-600">{rec.human_friendly.one_liner}</p>
         <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
           <span>Confidence: {Math.round(rec.confidence * 100)}%</span>
           <span>Verdict: {rec.stability_assessment.verdict}</span>
@@ -148,35 +160,35 @@ export function RecommendationDetailPage() {
           <h3 className="text-sm font-medium text-zinc-900 mb-3">Your Feedback</h3>
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => submitFeedback('USEFUL')}
+              onClick={() => submitFeedback('useful')}
               disabled={submittingFeedback}
               className="btn btn-secondary"
             >
               Useful
             </button>
             <button
-              onClick={() => submitFeedback('NOT_RELEVANT')}
+              onClick={() => submitFeedback('not_relevant')}
               disabled={submittingFeedback}
               className="btn btn-secondary"
             >
               Not Relevant
             </button>
             <button
-              onClick={() => submitFeedback('ALREADY_KNEW')}
+              onClick={() => submitFeedback('already_knew')}
               disabled={submittingFeedback}
               className="btn btn-secondary"
             >
               Already Knew
             </button>
             <button
-              onClick={() => submitFeedback('ADOPTED')}
+              onClick={() => submitFeedback('adopted')}
               disabled={submittingFeedback}
               className="btn btn-primary"
             >
               Adopted
             </button>
             <button
-              onClick={() => submitFeedback('DISMISSED')}
+              onClick={() => submitFeedback('dismissed')}
               disabled={submittingFeedback}
               className="btn btn-ghost"
             >
@@ -225,7 +237,7 @@ export function RecommendationDetailPage() {
         <div className="card mb-6 bg-zinc-50">
           <div className="flex items-center gap-2">
             <span className="text-sm text-zinc-600">Feedback submitted:</span>
-            <span className="badge badge-accent">{existingFeedback.feedback_type}</span>
+            <span className="badge badge-accent">{existingFeedback.status}</span>
           </div>
         </div>
       )}
@@ -295,7 +307,7 @@ export function RecommendationDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <div className="text-xs text-zinc-500">Days</div>
-            <div className="text-zinc-900 font-medium">{rec.technical.effort.calibratedEstimateDays}</div>
+            <div className="text-zinc-900 font-medium">{rec.technical.effort.calibrated_estimate_days}</div>
           </div>
           <div>
             <div className="text-xs text-zinc-500">Complexity</div>
@@ -303,7 +315,7 @@ export function RecommendationDetailPage() {
           </div>
           <div>
             <div className="text-xs text-zinc-500">Breaking Changes</div>
-            <div>{rec.technical.effort.breakingChanges ? 'Yes' : 'No'}</div>
+            <div>{rec.technical.effort.breaking_changes ? 'Yes' : 'No'}</div>
           </div>
           <div>
             <div className="text-xs text-zinc-500">Reversibility</div>
@@ -329,12 +341,14 @@ export function RecommendationDetailPage() {
           {Object.entries(rec.technical.impact).map(([key, val]) => (
             <div key={key}>
               <div className="text-xs text-zinc-500 capitalize">{key}</div>
-              {typeof val === 'object' && 'scoreChange' in val ? (
-                <div className="text-zinc-700">{val.scoreChange}</div>
-              ) : (
+              {typeof val === 'object' && 'score_change' in val ? (
+                <div className="text-zinc-700">{val.score_change}</div>
+              ) : typeof val === 'object' && 'level' in val ? (
                 <div className="text-zinc-700">
                   <span className={`badge badge-${val.level}`}>{val.level}</span>
                 </div>
+              ) : (
+                <div className="text-zinc-700">—</div>
               )}
             </div>
           ))}
@@ -362,11 +376,11 @@ export function RecommendationDetailPage() {
       </div>
 
       {/* Failure Modes */}
-      {rec.technical.failureModes.length > 0 && (
+      {rec.technical.failure_modes.length > 0 && (
         <div className="card mb-4">
           <h3 className="text-sm font-medium text-zinc-900 mb-3">Failure Modes</h3>
           <div className="space-y-2">
-            {rec.technical.failureModes.map((fm, i) => (
+            {rec.technical.failure_modes.map((fm, i) => (
               <div key={i} className="text-sm border-l-2 border-zinc-200 pl-3">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-zinc-700">{fm.mode}</span>
@@ -387,7 +401,7 @@ export function RecommendationDetailPage() {
         <p className="text-sm text-zinc-600 whitespace-pre-wrap">{rec.human_friendly.summary}</p>
         <div className="mt-3">
           <h4 className="text-xs font-medium text-zinc-500 mb-1">Why Now?</h4>
-          <p className="text-sm text-zinc-600">{rec.human_friendly.whyNow}</p>
+          <p className="text-sm text-zinc-600">{rec.human_friendly.why_now}</p>
         </div>
       </div>
 

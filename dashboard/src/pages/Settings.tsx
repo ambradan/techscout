@@ -11,9 +11,9 @@ export function SettingsPage() {
 
   // Form state
   const [scoutingEnabled, setScoutingEnabled] = useState(true);
+  const [scoutingFrequency, setScoutingFrequency] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly'>('weekly');
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [excludeCategories, setExcludeCategories] = useState<string[]>([]);
-  const [maturityFilter, setMaturityFilter] = useState('early_adopter');
   const [maxRecommendations, setMaxRecommendations] = useState(5);
   const [notificationChannels, setNotificationChannels] = useState<string[]>([]);
 
@@ -28,11 +28,13 @@ export function SettingsPage() {
   useEffect(() => {
     if (selectedProject) {
       setScoutingEnabled(selectedProject.scouting_enabled);
+      setScoutingFrequency(selectedProject.scouting_frequency);
       setFocusAreas(selectedProject.focus_areas);
       setExcludeCategories(selectedProject.exclude_categories);
-      setMaturityFilter(selectedProject.maturity_filter);
       setMaxRecommendations(selectedProject.max_recommendations);
-      setNotificationChannels(selectedProject.notification_channels);
+      // Cast notification_channels to string[]
+      const channels = selectedProject.notification_channels as unknown[];
+      setNotificationChannels(channels.filter((c): c is string => typeof c === 'string'));
     }
   }, [selectedProject]);
 
@@ -65,9 +67,9 @@ export function SettingsPage() {
         .from('projects')
         .update({
           scouting_enabled: scoutingEnabled,
+          scouting_frequency: scoutingFrequency,
           focus_areas: focusAreas,
           exclude_categories: excludeCategories,
-          maturity_filter: maturityFilter,
           max_recommendations: maxRecommendations,
           notification_channels: notificationChannels,
         })
@@ -202,16 +204,16 @@ export function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="label">Maturity Filter</label>
+                    <label className="label">Scouting Frequency</label>
                     <select
-                      value={maturityFilter}
-                      onChange={(e) => setMaturityFilter(e.target.value)}
+                      value={scoutingFrequency}
+                      onChange={(e) => setScoutingFrequency(e.target.value as typeof scoutingFrequency)}
                       className="input w-auto"
                     >
-                      <option value="conservative">Conservative (stable only)</option>
-                      <option value="mainstream">Mainstream (widely adopted)</option>
-                      <option value="early_adopter">Early Adopter (growing)</option>
-                      <option value="bleeding_edge">Bleeding Edge (experimental)</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly</option>
+                      <option value="monthly">Monthly</option>
                     </select>
                   </div>
 
