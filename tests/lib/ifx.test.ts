@@ -110,8 +110,8 @@ describe('IFX Helpers', () => {
 
     it('should include type suffix when provided', () => {
       const id = generateTraceId('MIG');
-      // Format: IFX-YYYY-MMDD-TYPE-SEQ
-      expect(id).toMatch(/^IFX-\d{4}-\d{4}-MIG-[A-Z0-9-]+$/);
+      // Format: IFX-YYYY-MMDD-TYPE-SEQ (SEQ may contain underscores from nanoid)
+      expect(id).toMatch(/^IFX-\d{4}-\d{4}-MIG-[A-Z0-9_-]+$/);
     });
   });
 
