@@ -79,7 +79,7 @@ export function ProjectsPage() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
 
-      const { data: projectData, error: insertError } = await supabase.from('projects').insert({
+      const { error: insertError } = await supabase.from('projects').insert({
         owner_id: user.user.id,
         name: newProject.name,
         slug,
@@ -88,17 +88,9 @@ export function ProjectsPage() {
         exclude_categories: [],
         max_recommendations: 5,
         notification_channels: [],
-      }).select().single();
+      });
 
       if (insertError) throw insertError;
-
-      // Create project_manifest with description if provided
-      if (newProject.description && projectData) {
-        await supabase.from('project_manifest').insert({
-          project_id: projectData.id,
-          description: newProject.description,
-        });
-      }
 
       setNewProject({ name: '', description: '', repo_url: '' });
       setShowNewProjectForm(false);
