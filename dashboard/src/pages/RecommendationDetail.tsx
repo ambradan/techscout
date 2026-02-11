@@ -129,23 +129,23 @@ export function RecommendationDetailPage() {
     <div className="p-4 md:p-6 max-w-4xl">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-zinc-500 mb-4">
-        <Link to="/projects" className="hover:text-zinc-900">Projects</Link>
+        <Link to="/projects" className="hover:text-zinc-300 transition-colors duration-150">Projects</Link>
         <span>/</span>
-        <Link to={`/projects/${project.id}`} className="hover:text-zinc-900">{project.name}</Link>
+        <Link to={`/projects/${project.id}`} className="hover:text-zinc-300 transition-colors duration-150">{project.name}</Link>
         <span>/</span>
-        <span className="text-zinc-900">Recommendation</span>
+        <span className="text-zinc-100">Recommendation</span>
       </div>
 
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap mb-2">
-          <h1 className="text-lg font-semibold text-zinc-900">{rec.subject.name}</h1>
+          <h1 className="text-lg font-semibold text-zinc-100">{rec.subject.name}</h1>
           <span className={`badge ${getActionBadgeClass(rec.action)}`}>
             {rec.action.replace('_', ' ')}
           </span>
           <span className={`badge badge-${rec.priority}`}>{rec.priority}</span>
         </div>
-        <p className="text-sm text-zinc-600">{rec.human_friendly.one_liner}</p>
+        <p className="text-sm text-zinc-400">{rec.human_friendly.one_liner}</p>
         <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
           <span>Confidence: {Math.round(rec.confidence * 100)}%</span>
           <span>Verdict: {rec.stability_assessment.verdict}</span>
@@ -157,7 +157,7 @@ export function RecommendationDetailPage() {
       {/* Feedback Buttons */}
       {!existingFeedback && (
         <div className="card mb-6">
-          <h3 className="text-sm font-medium text-zinc-900 mb-3">Your Feedback</h3>
+          <h3 className="text-sm font-medium text-zinc-100 mb-3">Your Feedback</h3>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => submitFeedback('useful')}
@@ -197,8 +197,8 @@ export function RecommendationDetailPage() {
           </div>
 
           {showAdoptionForm && (
-            <div className="mt-4 p-3 bg-zinc-50 border border-zinc-200 rounded-sm">
-              <h4 className="text-sm font-medium text-zinc-900 mb-2">Adoption Details (optional)</h4>
+            <div className="mt-4 p-3 bg-zinc-800 border border-zinc-700 rounded-sm">
+              <h4 className="text-sm font-medium text-zinc-100 mb-2">Adoption Details (optional)</h4>
               <div className="space-y-3">
                 <div>
                   <label className="label">Actual days to implement</label>
@@ -234,9 +234,9 @@ export function RecommendationDetailPage() {
       )}
 
       {existingFeedback && (
-        <div className="card mb-6 bg-zinc-50">
+        <div className="card mb-6 bg-zinc-800/50">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-600">Feedback submitted:</span>
+            <span className="text-sm text-zinc-400">Feedback submitted:</span>
             <span className="badge badge-accent">{existingFeedback.status}</span>
           </div>
         </div>
@@ -244,7 +244,7 @@ export function RecommendationDetailPage() {
 
       {/* Technical Analysis */}
       <div className="card mb-4">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Analysis</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Analysis</h3>
         <div className="space-y-4">
           {/* Facts */}
           {rec.technical.analysis.facts.length > 0 && (
@@ -255,8 +255,8 @@ export function RecommendationDetailPage() {
                   <div key={i} className="flex gap-2 text-sm">
                     <span className="badge ifx-fact shrink-0">FACT</span>
                     <div>
-                      <span className="text-zinc-700">{fact.claim}</span>
-                      <span className="text-xs text-zinc-400 ml-2">— {fact.source}</span>
+                      <span className="text-zinc-300">{fact.claim}</span>
+                      <span className="text-xs text-zinc-500 ml-2">— {fact.source}</span>
                     </div>
                   </div>
                 ))}
@@ -273,8 +273,8 @@ export function RecommendationDetailPage() {
                   <div key={i} className="flex gap-2 text-sm">
                     <span className="badge ifx-inference shrink-0">INFERENCE</span>
                     <div>
-                      <span className="text-zinc-700">{inf.claim}</span>
-                      <span className="text-xs text-zinc-400 ml-2">
+                      <span className="text-zinc-300">{inf.claim}</span>
+                      <span className="text-xs text-zinc-500 ml-2">
                         (confidence: {Math.round(inf.confidence * 100)}%)
                       </span>
                     </div>
@@ -292,7 +292,7 @@ export function RecommendationDetailPage() {
                 {rec.technical.analysis.assumptions.map((asm, i) => (
                   <div key={i} className="flex gap-2 text-sm">
                     <span className="badge ifx-assumption shrink-0">ASSUMPTION</span>
-                    <span className="text-zinc-700">{asm.claim}</span>
+                    <span className="text-zinc-300">{asm.claim}</span>
                   </div>
                 ))}
               </div>
@@ -303,29 +303,29 @@ export function RecommendationDetailPage() {
 
       {/* Effort */}
       <div className="card mb-4">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Effort Estimate</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Effort Estimate</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <div className="text-xs text-zinc-500">Days</div>
-            <div className="text-zinc-900 font-medium">{rec.technical.effort.calibrated_estimate_days}</div>
+            <div className="text-zinc-100 font-medium">{rec.technical.effort.calibrated_estimate_days}</div>
           </div>
           <div>
             <div className="text-xs text-zinc-500">Complexity</div>
-            <div className="capitalize">{rec.technical.effort.complexity}</div>
+            <div className="text-zinc-300 capitalize">{rec.technical.effort.complexity}</div>
           </div>
           <div>
             <div className="text-xs text-zinc-500">Breaking Changes</div>
-            <div>{rec.technical.effort.breaking_changes ? 'Yes' : 'No'}</div>
+            <div className="text-zinc-300">{rec.technical.effort.breaking_changes ? 'Yes' : 'No'}</div>
           </div>
           <div>
             <div className="text-xs text-zinc-500">Reversibility</div>
-            <div className="capitalize">{rec.technical.effort.reversibility}</div>
+            <div className="text-zinc-300 capitalize">{rec.technical.effort.reversibility}</div>
           </div>
         </div>
         {rec.technical.effort.steps.length > 0 && (
           <div className="mt-3">
             <div className="text-xs text-zinc-500 mb-1">Steps</div>
-            <ol className="list-decimal list-inside text-sm text-zinc-700 space-y-1">
+            <ol className="list-decimal list-inside text-sm text-zinc-300 space-y-1">
               {rec.technical.effort.steps.map((step, i) => (
                 <li key={i}>{step}</li>
               ))}
@@ -336,19 +336,19 @@ export function RecommendationDetailPage() {
 
       {/* Impact */}
       <div className="card mb-4">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Impact</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Impact</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           {Object.entries(rec.technical.impact).map(([key, val]) => (
             <div key={key}>
               <div className="text-xs text-zinc-500 capitalize">{key}</div>
               {typeof val === 'object' && 'score_change' in val ? (
-                <div className="text-zinc-700">{val.score_change}</div>
+                <div className="text-zinc-300">{val.score_change}</div>
               ) : typeof val === 'object' && 'level' in val ? (
-                <div className="text-zinc-700">
+                <div className="text-zinc-300">
                   <span className={`badge badge-${val.level}`}>{val.level}</span>
                 </div>
               ) : (
-                <div className="text-zinc-700">—</div>
+                <div className="text-zinc-500">—</div>
               )}
             </div>
           ))}
@@ -358,16 +358,16 @@ export function RecommendationDetailPage() {
       {/* Tradeoffs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div className="card">
-          <h3 className="text-sm font-medium text-green-700 mb-2">Gains</h3>
-          <ul className="list-disc list-inside text-sm text-zinc-600 space-y-1">
+          <h3 className="text-sm font-medium text-emerald-400 mb-2">Gains</h3>
+          <ul className="list-disc list-inside text-sm text-zinc-400 space-y-1">
             {rec.technical.tradeoffs.gains.map((g, i) => (
               <li key={i}>{g}</li>
             ))}
           </ul>
         </div>
         <div className="card">
-          <h3 className="text-sm font-medium text-red-700 mb-2">Losses</h3>
-          <ul className="list-disc list-inside text-sm text-zinc-600 space-y-1">
+          <h3 className="text-sm font-medium text-red-400 mb-2">Losses</h3>
+          <ul className="list-disc list-inside text-sm text-zinc-400 space-y-1">
             {rec.technical.tradeoffs.losses.map((l, i) => (
               <li key={i}>{l}</li>
             ))}
@@ -378,12 +378,12 @@ export function RecommendationDetailPage() {
       {/* Failure Modes */}
       {rec.technical.failure_modes.length > 0 && (
         <div className="card mb-4">
-          <h3 className="text-sm font-medium text-zinc-900 mb-3">Failure Modes</h3>
+          <h3 className="text-sm font-medium text-zinc-100 mb-3">Failure Modes</h3>
           <div className="space-y-2">
             {rec.technical.failure_modes.map((fm, i) => (
-              <div key={i} className="text-sm border-l-2 border-zinc-200 pl-3">
+              <div key={i} className="text-sm border-l-2 border-zinc-700 pl-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-zinc-700">{fm.mode}</span>
+                  <span className="font-medium text-zinc-300">{fm.mode}</span>
                   <span className={`badge badge-${fm.probability === 'high' ? 'high' : fm.probability === 'medium' ? 'medium' : 'low'}`}>
                     {fm.probability}
                   </span>
@@ -397,19 +397,19 @@ export function RecommendationDetailPage() {
 
       {/* Human Summary */}
       <div className="card mb-4">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Summary</h3>
-        <p className="text-sm text-zinc-600 whitespace-pre-wrap">{rec.human_friendly.summary}</p>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Summary</h3>
+        <p className="text-sm text-zinc-400 whitespace-pre-wrap">{rec.human_friendly.summary}</p>
         <div className="mt-3">
           <h4 className="text-xs font-medium text-zinc-500 mb-1">Why Now?</h4>
-          <p className="text-sm text-zinc-600">{rec.human_friendly.why_now}</p>
+          <p className="text-sm text-zinc-400">{rec.human_friendly.why_now}</p>
         </div>
       </div>
 
       {/* Limitations */}
       {rec.technical.limitations.length > 0 && (
-        <div className="card bg-yellow-50 border-yellow-200">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">Limitations</h3>
-          <ul className="list-disc list-inside text-sm text-yellow-700 space-y-1">
+        <div className="card bg-amber-500/10 border-amber-500/20">
+          <h3 className="text-sm font-medium text-amber-400 mb-2">Limitations</h3>
+          <ul className="list-disc list-inside text-sm text-amber-300/80 space-y-1">
             {rec.technical.limitations.map((l, i) => (
               <li key={i}>{l}</li>
             ))}

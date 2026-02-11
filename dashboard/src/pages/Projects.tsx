@@ -23,7 +23,6 @@ export function ProjectsPage() {
   async function loadProjects() {
     setLoading(true);
     try {
-      // Load projects
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*')
@@ -31,17 +30,14 @@ export function ProjectsPage() {
 
       if (projectsError) throw projectsError;
 
-      // Load stack health and recommendations for each project
       const projectsWithStats: ProjectWithStats[] = await Promise.all(
         (projectsData || []).map(async (project: Project) => {
-          // Get stack health
           const { data: healthData } = await supabase
             .from('stack_health')
             .select('*')
             .eq('project_id', project.id)
             .single();
 
-          // Get undelivered recommendations count (is_delivered = false)
           const { count } = await supabase
             .from('recommendations')
             .select('*', { count: 'exact', head: true })
@@ -104,9 +100,8 @@ export function ProjectsPage() {
   }
 
   function getHealthColor(score: number) {
-    if (score >= 0.8) return 'bg-green-500';
-    if (score >= 0.6) return 'bg-yellow-500';
-    if (score >= 0.4) return 'bg-orange-500';
+    if (score >= 0.7) return 'bg-emerald-500';
+    if (score >= 0.4) return 'bg-amber-500';
     return 'bg-red-500';
   }
 
@@ -128,9 +123,10 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-zinc-900">Projects</h1>
+    <div className="p-6 max-w-5xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-semibold text-zinc-100">Projects</h1>
         <button
           onClick={() => setShowNewProjectForm(true)}
           className="btn btn-primary"
@@ -139,17 +135,18 @@ export function ProjectsPage() {
         </button>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-sm px-3 py-2">
+        <div className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm px-3 py-2">
           {error}
         </div>
       )}
 
       {/* New Project Form */}
       {showNewProjectForm && (
-        <div className="mb-4 card">
-          <h2 className="text-sm font-medium text-zinc-900 mb-3">New Project</h2>
-          <form onSubmit={createProject} className="space-y-3">
+        <div className="mb-6 card">
+          <h2 className="text-sm font-medium text-zinc-100 mb-4">New Project</h2>
+          <form onSubmit={createProject} className="space-y-4">
             <div>
               <label className="label">Project Name</label>
               <input
@@ -173,9 +170,9 @@ export function ProjectsPage() {
             </div>
 
             {/* Data Privacy Notice */}
-            <div className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-sm p-3">
-              <strong className="text-zinc-700">Data Collection Notice:</strong> TechScout analyzes{' '}
-              <strong>only manifest files</strong> from your repository (package.json, requirements.txt, etc.).
+            <div className="text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 rounded-sm p-3">
+              <span className="text-zinc-300 font-medium">Data Collection Notice:</span> TechScout analyzes{' '}
+              <span className="text-zinc-300">only manifest files</span> from your repository (package.json, requirements.txt, etc.).
               Source code is never read, copied, or sent to external services.
             </div>
 
@@ -200,7 +197,7 @@ export function ProjectsPage() {
 
       {/* Projects Table */}
       {projects.length === 0 ? (
-        <div className="text-sm text-zinc-500 text-center py-12">
+        <div className="text-sm text-zinc-500 text-center py-16">
           No projects yet. Create your first project to get started.
         </div>
       ) : (
@@ -209,10 +206,10 @@ export function ProjectsPage() {
             <thead>
               <tr>
                 <th>Project</th>
-                <th className="w-32">Health</th>
+                <th className="w-36">Health</th>
                 <th className="w-24 text-center">Pending</th>
                 <th className="w-28">Last Scan</th>
-                <th className="w-20 text-center">Status</th>
+                <th className="w-24 text-center">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -221,44 +218,48 @@ export function ProjectsPage() {
                   <td>
                     <Link
                       to={`/projects/${project.id}`}
-                      className="text-zinc-900 hover:text-blue-600 font-medium"
+                      className="text-zinc-100 hover:text-emerald-400 font-medium transition-colors duration-150"
                     >
                       {project.name}
                     </Link>
                   </td>
                   <td>
                     {project.stackHealth ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <div className="health-bar flex-1">
                           <div
                             className={`health-bar-fill ${getHealthColor(project.stackHealth.overall_score)}`}
                             style={{ width: `${project.stackHealth.overall_score * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs text-zinc-600 tabular-nums">
+                        <span className="text-xs text-zinc-400 tabular-nums w-8">
                           {Math.round(project.stackHealth.overall_score * 100)}%
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xs text-zinc-400">—</span>
+                      <span className="text-xs text-zinc-600">—</span>
                     )}
                   </td>
                   <td className="text-center">
                     {project.pendingRecommendations > 0 ? (
                       <span className="badge badge-accent">{project.pendingRecommendations}</span>
                     ) : (
-                      <span className="text-xs text-zinc-400">0</span>
+                      <span className="text-xs text-zinc-600">0</span>
                     )}
                   </td>
-                  <td className="text-xs text-zinc-500">
-                    {project.stackHealth
-                      ? formatDate(project.stackHealth.last_calculated)
-                      : 'Never'}
+                  <td className="text-xs">
+                    {project.stackHealth ? (
+                      <span className="text-zinc-400">{formatDate(project.stackHealth.last_calculated)}</span>
+                    ) : (
+                      <span className="text-zinc-600 italic">Never</span>
+                    )}
                   </td>
                   <td className="text-center">
                     <span
                       className={`badge ${
-                        project.scouting_enabled ? 'badge-low' : 'badge-info'
+                        project.scouting_enabled
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-zinc-800 text-zinc-500'
                       }`}
                     >
                       {project.scouting_enabled ? 'Active' : 'Paused'}

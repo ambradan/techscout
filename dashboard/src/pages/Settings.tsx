@@ -131,13 +131,13 @@ export function SettingsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl">
-      <h1 className="text-lg font-semibold text-zinc-900 mb-4">Settings</h1>
+      <h1 className="text-lg font-semibold text-zinc-100 mb-4">Settings</h1>
 
       {message && (
         <div className={`mb-4 text-sm px-3 py-2 rounded-sm ${
           message.type === 'success'
-            ? 'bg-green-50 text-green-700 border border-green-200'
-            : 'bg-red-50 text-red-700 border border-red-200'
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : 'bg-red-500/10 text-red-400 border border-red-500/20'
         }`}>
           {message.text}
         </div>
@@ -168,7 +168,7 @@ export function SettingsPage() {
             <>
               {/* Scouting Config */}
               <div className="card mb-4">
-                <h2 className="text-sm font-medium text-zinc-900 mb-4">Scouting Configuration</h2>
+                <h2 className="text-sm font-medium text-zinc-100 mb-4">Scouting Configuration</h2>
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
@@ -179,7 +179,7 @@ export function SettingsPage() {
                       onChange={(e) => setScoutingEnabled(e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <label htmlFor="scoutingEnabled" className="text-sm text-zinc-700">
+                    <label htmlFor="scoutingEnabled" className="text-sm text-zinc-300">
                       Enable scouting for this project
                     </label>
                   </div>
@@ -191,10 +191,10 @@ export function SettingsPage() {
                         <button
                           key={area}
                           onClick={() => toggleFocusArea(area)}
-                          className={`px-2 py-1 text-xs rounded-sm border ${
+                          className={`focus-tag ${
                             focusAreas.includes(area)
-                              ? 'bg-zinc-900 text-white border-zinc-900'
-                              : 'bg-white text-zinc-600 border-zinc-300 hover:border-zinc-400'
+                              ? 'focus-tag-active'
+                              : 'focus-tag-inactive'
                           }`}
                         >
                           {area}
@@ -233,7 +233,7 @@ export function SettingsPage() {
 
               {/* Notification Channels */}
               <div className="card mb-4">
-                <h2 className="text-sm font-medium text-zinc-900 mb-4">Notification Channels</h2>
+                <h2 className="text-sm font-medium text-zinc-100 mb-4">Notification Channels</h2>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <input
@@ -249,7 +249,7 @@ export function SettingsPage() {
                       }}
                       className="w-4 h-4"
                     />
-                    <label htmlFor="notifyEmail" className="text-sm text-zinc-700">
+                    <label htmlFor="notifyEmail" className="text-sm text-zinc-300">
                       Email notifications
                     </label>
                   </div>
@@ -267,7 +267,7 @@ export function SettingsPage() {
                       }}
                       className="w-4 h-4"
                     />
-                    <label htmlFor="notifySlack" className="text-sm text-zinc-700">
+                    <label htmlFor="notifySlack" className="text-sm text-zinc-300">
                       Slack notifications
                     </label>
                   </div>
@@ -276,13 +276,13 @@ export function SettingsPage() {
 
               {/* Privacy & Data */}
               <div className="card mb-4">
-                <h2 className="text-sm font-medium text-zinc-900 mb-4">Privacy & Data</h2>
-                <p className="text-sm text-zinc-600 mb-3">
+                <h2 className="text-sm font-medium text-zinc-100 mb-4">Privacy & Data</h2>
+                <p className="text-sm text-zinc-400 mb-3">
                   TechScout only analyzes manifest files from your repository. Source code is never
                   read, stored, or sent to any external service.
                 </p>
-                <div className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-sm p-3 mb-4">
-                  <strong>Data collected:</strong> Dependency lists, language percentages, framework
+                <div className="text-xs text-zinc-500 bg-zinc-800 border border-zinc-700 rounded-sm p-3 mb-4">
+                  <span className="text-zinc-300 font-medium">Data collected:</span> Dependency lists, language percentages, framework
                   versions, repository topics. Nothing else.
                 </div>
                 <button onClick={deleteProject} className="btn btn-danger">

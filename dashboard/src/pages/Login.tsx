@@ -26,15 +26,15 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-xl font-semibold text-zinc-900">TechScout</h1>
+          <h1 className="text-xl font-semibold text-zinc-100">TechScout</h1>
           <p className="text-sm text-zinc-500 mt-1">Technology Intelligence Platform</p>
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-sm p-6">
-          <h2 className="text-sm font-medium text-zinc-900 mb-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-sm p-6">
+          <h2 className="text-sm font-medium text-zinc-100 mb-4">
             {isSignUp ? 'Create account' : 'Sign in'}
           </h2>
 
@@ -71,7 +71,7 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-sm px-3 py-2">
+              <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm px-3 py-2">
                 {error}
               </div>
             )}
@@ -91,7 +91,7 @@ export function LoginPage() {
                 setIsSignUp(!isSignUp);
                 setError(null);
               }}
-              className="text-sm text-zinc-500 hover:text-zinc-900"
+              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors duration-150"
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
@@ -99,7 +99,7 @@ export function LoginPage() {
         </div>
 
         <div className="mt-4 text-center">
-          <Link to="/privacy" className="text-xs text-zinc-500 hover:text-zinc-900">
+          <Link to="/privacy" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors duration-150">
             Privacy & Data Policy
           </Link>
         </div>

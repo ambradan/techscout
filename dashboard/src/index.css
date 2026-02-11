@@ -1,218 +1,197 @@
 @import "tailwindcss";
 
-/* TechScout Design System - Linear/Vercel/GitHub inspired */
-/* Minimal, dense, professional. No generic SaaS aesthetics. */
+/* TechScout Design System - Dark Mode */
+/* Minimal, dense, professional. Linear/Vercel inspired. */
 
 :root {
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --status-critical: #dc2626;
-  --status-high: #ea580c;
-  --status-medium: #ca8a04;
-  --status-low: #16a34a;
-  --status-info: #6b7280;
-  --ifx-fact: #16a34a;
-  --ifx-inference: #2563eb;
-  --ifx-assumption: #ca8a04;
+  --bg-primary: #09090b;      /* zinc-950 */
+  --bg-secondary: #18181b;    /* zinc-900 */
+  --bg-tertiary: #27272a;     /* zinc-800 */
+  --border: #27272a;          /* zinc-800 */
+  --border-light: #3f3f46;    /* zinc-700 */
+  --text-primary: #f4f4f5;    /* zinc-100 */
+  --text-secondary: #a1a1aa;  /* zinc-400 */
+  --text-muted: #52525b;      /* zinc-600 */
+  --accent: #10b981;          /* emerald-500 */
+  --accent-hover: #059669;    /* emerald-600 */
+  --accent-muted: rgba(16, 185, 129, 0.1);
+  --danger: #ef4444;          /* red-500 */
+  --danger-muted: rgba(239, 68, 68, 0.1);
+  --warning: #f59e0b;         /* amber-500 */
+  --warning-muted: rgba(245, 158, 11, 0.1);
 }
 
 html {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  @apply bg-white text-zinc-900 m-0;
+  @apply bg-zinc-950 text-zinc-100 m-0;
 }
 
-.dark body {
-  @apply bg-zinc-950 text-zinc-300;
-}
-
-/* Compact card */
+/* ============================================================
+   CARDS
+   ============================================================ */
 .card {
-  @apply bg-white border border-zinc-200 rounded-sm p-3;
+  @apply bg-zinc-900 border border-zinc-800 rounded-sm p-4;
 }
 
-.dark .card {
-  @apply bg-zinc-900 border-zinc-800;
-}
-
-/* Dense table */
+/* ============================================================
+   TABLES
+   ============================================================ */
 .table-dense {
   @apply w-full text-sm;
 }
 
 .table-dense th {
-  @apply text-left text-xs font-medium text-zinc-500 uppercase tracking-wide py-2 px-3 border-b border-zinc-200 bg-zinc-50;
-}
-
-.dark .table-dense th {
-  @apply text-zinc-400 border-zinc-800 bg-zinc-900;
+  @apply text-left text-xs font-medium text-zinc-500 uppercase tracking-wider py-2.5 px-3 border-b border-zinc-800 bg-zinc-900/50;
 }
 
 .table-dense td {
-  @apply py-2 px-3 border-b border-zinc-100;
+  @apply py-2.5 px-3 border-b border-zinc-800/50 text-zinc-300;
 }
 
-.dark .table-dense td {
-  @apply border-zinc-800/50;
+.table-dense tbody tr {
+  @apply transition-colors duration-150;
 }
 
 .table-dense tbody tr:hover td {
-  @apply bg-zinc-50;
+  @apply bg-zinc-800/50;
 }
 
-.dark .table-dense tbody tr:hover td {
-  @apply bg-zinc-900/50;
-}
-
-/* Buttons */
+/* ============================================================
+   BUTTONS
+   ============================================================ */
 .btn {
-  @apply inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-zinc-950 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 .btn-primary {
-  @apply bg-zinc-900 text-white hover:bg-zinc-800;
-}
-
-.dark .btn-primary {
-  @apply bg-zinc-100 text-zinc-900 hover:bg-zinc-200;
+  @apply bg-emerald-600 text-zinc-950 hover:bg-emerald-500;
 }
 
 .btn-secondary {
-  @apply bg-white text-zinc-700 border border-zinc-300 hover:bg-zinc-50;
-}
-
-.dark .btn-secondary {
-  @apply bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700;
+  @apply bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 hover:text-zinc-100;
 }
 
 .btn-ghost {
-  @apply text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100;
-}
-
-.dark .btn-ghost {
   @apply text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800;
 }
 
 .btn-danger {
-  @apply bg-red-600 text-white hover:bg-red-700;
+  @apply border border-red-500/50 text-red-400 hover:bg-red-500/10 bg-transparent;
 }
 
-/* Inputs */
+/* ============================================================
+   INPUTS
+   ============================================================ */
 .input {
-  @apply w-full px-3 py-1.5 text-sm bg-white border border-zinc-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-zinc-400;
+  @apply w-full px-3 py-1.5 text-sm bg-zinc-950 border border-zinc-700 rounded-sm text-zinc-100 placeholder-zinc-500 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent;
 }
 
-.dark .input {
-  @apply bg-zinc-900 border-zinc-700 placeholder-zinc-500 text-zinc-100;
+.input:hover {
+  @apply border-zinc-600;
+}
+
+select.input {
+  @apply cursor-pointer;
+}
+
+textarea.input {
+  @apply resize-none;
 }
 
 .label {
-  @apply block text-xs font-medium text-zinc-600 mb-1;
+  @apply block text-xs font-medium text-zinc-400 mb-1.5;
 }
 
-.dark .label {
-  @apply text-zinc-400;
-}
-
-/* Badges */
+/* ============================================================
+   BADGES
+   ============================================================ */
 .badge {
   @apply inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-sm;
 }
 
-.badge-critical { @apply bg-red-100 text-red-800; }
-.badge-high { @apply bg-orange-100 text-orange-800; }
-.badge-medium { @apply bg-yellow-100 text-yellow-800; }
-.badge-low { @apply bg-green-100 text-green-800; }
-.badge-info { @apply bg-zinc-100 text-zinc-700; }
-.badge-accent { @apply bg-blue-100 text-blue-800; }
-
-.dark .badge-critical { @apply bg-red-900/30 text-red-400; }
-.dark .badge-high { @apply bg-orange-900/30 text-orange-400; }
-.dark .badge-medium { @apply bg-yellow-900/30 text-yellow-400; }
-.dark .badge-low { @apply bg-green-900/30 text-green-400; }
-.dark .badge-info { @apply bg-zinc-800 text-zinc-400; }
-.dark .badge-accent { @apply bg-blue-900/30 text-blue-400; }
+/* Priority badges */
+.badge-critical { @apply bg-red-500/10 text-red-400; }
+.badge-high { @apply bg-orange-500/10 text-orange-400; }
+.badge-medium { @apply bg-yellow-500/10 text-yellow-400; }
+.badge-low { @apply bg-emerald-500/10 text-emerald-400; }
+.badge-info { @apply bg-zinc-800 text-zinc-400; }
+.badge-accent { @apply bg-emerald-500/10 text-emerald-400; }
 
 /* Action badges */
-.badge-replace { @apply bg-red-100 text-red-700; }
-.badge-complement { @apply bg-blue-100 text-blue-700; }
-.badge-new { @apply bg-green-100 text-green-700; }
-.badge-monitor { @apply bg-zinc-100 text-zinc-700; }
-
-.dark .badge-replace { @apply bg-red-900/30 text-red-400; }
-.dark .badge-complement { @apply bg-blue-900/30 text-blue-400; }
-.dark .badge-new { @apply bg-green-900/30 text-green-400; }
-.dark .badge-monitor { @apply bg-zinc-800 text-zinc-400; }
+.badge-replace { @apply bg-red-500/10 text-red-400; }
+.badge-complement { @apply bg-blue-500/10 text-blue-400; }
+.badge-new { @apply bg-emerald-500/10 text-emerald-400; }
+.badge-monitor { @apply bg-zinc-800 text-zinc-400; }
 
 /* IFX tags */
-.ifx-fact { @apply bg-green-100 text-green-800; }
-.ifx-inference { @apply bg-blue-100 text-blue-800; }
-.ifx-assumption { @apply bg-yellow-100 text-yellow-800; }
+.ifx-fact { @apply bg-emerald-500/10 text-emerald-400; }
+.ifx-inference { @apply bg-blue-500/10 text-blue-400; }
+.ifx-assumption { @apply bg-amber-500/10 text-amber-400; }
 
-.dark .ifx-fact { @apply bg-green-900/30 text-green-400; }
-.dark .ifx-inference { @apply bg-blue-900/30 text-blue-400; }
-.dark .ifx-assumption { @apply bg-yellow-900/30 text-yellow-400; }
-
-/* Tabs */
+/* ============================================================
+   TABS
+   ============================================================ */
 .tab {
-  @apply px-3 py-2 text-sm font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-900 hover:border-zinc-300 transition-colors cursor-pointer;
-}
-
-.dark .tab {
-  @apply text-zinc-400 hover:text-zinc-100 hover:border-zinc-600;
+  @apply px-3 py-2 text-sm font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-300 hover:border-zinc-700 transition-colors duration-150 cursor-pointer;
 }
 
 .tab-active {
-  @apply text-zinc-900 border-zinc-900;
+  @apply text-emerald-400 border-emerald-500;
 }
 
-.dark .tab-active {
-  @apply text-zinc-100 border-zinc-100;
-}
-
-/* Sidebar */
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
 .sidebar {
-  @apply w-52 bg-zinc-50 border-r border-zinc-200 min-h-screen;
+  @apply w-56 bg-zinc-900 border-r border-zinc-800 min-h-screen flex flex-col;
 }
 
-.dark .sidebar {
-  @apply bg-zinc-900 border-zinc-800;
+.sidebar-logo {
+  @apply px-4 py-4 text-lg font-semibold text-zinc-100 border-b border-zinc-800;
+}
+
+.sidebar-nav {
+  @apply flex-1 py-2;
 }
 
 .sidebar-item {
-  @apply flex items-center gap-2 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer;
-}
-
-.dark .sidebar-item {
-  @apply text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
+  @apply flex items-center gap-2.5 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors duration-150 cursor-pointer border-l-2 border-transparent;
 }
 
 .sidebar-item-active {
-  @apply bg-zinc-100 text-zinc-900 font-medium;
+  @apply bg-zinc-800/50 text-zinc-100 border-l-2 border-emerald-500;
 }
 
-.dark .sidebar-item-active {
-  @apply bg-zinc-800 text-zinc-100;
+.sidebar-footer {
+  @apply px-4 py-3 border-t border-zinc-800;
 }
 
-/* Health bar */
+/* ============================================================
+   HEALTH BAR
+   ============================================================ */
 .health-bar {
-  @apply h-1.5 rounded-sm bg-zinc-200 overflow-hidden;
-}
-
-.dark .health-bar {
-  @apply bg-zinc-800;
+  @apply h-1 rounded-sm bg-zinc-800 overflow-hidden;
 }
 
 .health-bar-fill {
-  @apply h-full rounded-sm transition-all;
+  @apply h-full rounded-sm transition-all duration-300;
 }
 
-/* Scrollbar */
+/* ============================================================
+   LINKS
+   ============================================================ */
+a {
+  @apply transition-colors duration-150;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -223,22 +202,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-300 rounded-full;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-700;
+  @apply bg-zinc-700 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-zinc-400;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
   @apply bg-zinc-600;
 }
 
-/* Mobile */
+/* ============================================================
+   MOBILE
+   ============================================================ */
 @media (max-width: 768px) {
   .sidebar-mobile-hidden {
     @apply hidden;
@@ -249,10 +222,39 @@ body {
   }
 
   .table-scroll {
-    @apply overflow-x-auto -mx-3;
+    @apply overflow-x-auto -mx-4;
   }
 
   .table-scroll table {
     @apply min-w-[600px];
   }
+}
+
+/* ============================================================
+   FOCUS AREA TAGS (Settings page)
+   ============================================================ */
+.focus-tag {
+  @apply px-2.5 py-1 text-xs font-medium rounded-sm transition-colors duration-150 cursor-pointer;
+}
+
+.focus-tag-active {
+  @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/30;
+}
+
+.focus-tag-inactive {
+  @apply bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300;
+}
+
+/* ============================================================
+   CHECKBOX
+   ============================================================ */
+input[type="checkbox"] {
+  @apply w-4 h-4 rounded-sm border-zinc-600 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-950;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.footer {
+  @apply bg-zinc-900 border-t border-zinc-800 px-4 py-3 text-xs text-zinc-600;
 }

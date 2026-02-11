@@ -176,14 +176,14 @@ export function ProjectDetailPage() {
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center gap-2 text-sm text-zinc-500 mb-1">
-          <Link to="/projects" className="hover:text-zinc-900">Projects</Link>
+          <Link to="/projects" className="hover:text-zinc-300 transition-colors duration-150">Projects</Link>
           <span>/</span>
         </div>
-        <h1 className="text-lg font-semibold text-zinc-900">{project.name}</h1>
+        <h1 className="text-lg font-semibold text-zinc-100">{project.name}</h1>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-zinc-200 mb-4 overflow-x-auto">
+      <div className="flex gap-0 border-b border-zinc-800 mb-4 overflow-x-auto">
         {(['overview', 'recommendations', 'feed', 'breaking', 'history'] as Tab[]).map((tab) => (
           <button
             key={tab}
@@ -255,7 +255,7 @@ export function ProjectDetailPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           to={`/projects/${project.id}/rec/${rec.id}`}
-                          className="text-sm font-medium text-zinc-900 hover:text-blue-600"
+                          className="text-sm font-medium text-zinc-100 hover:text-emerald-400 transition-colors duration-150"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {rec.subject.name}
@@ -287,17 +287,17 @@ export function ProjectDetailPage() {
 
                   {/* Expanded Detail */}
                   {expandedRec === rec.id && (
-                    <div className="mt-3 pt-3 border-t border-zinc-100">
+                    <div className="mt-3 pt-3 border-t border-zinc-800">
                       <div className="flex gap-2 mb-3">
                         <button
                           onClick={() => setBriefView('technical')}
-                          className={`text-xs px-2 py-1 rounded-sm ${briefView === 'technical' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+                          className={`text-xs px-2 py-1 rounded-sm transition-colors duration-150 ${briefView === 'technical' ? 'bg-emerald-600 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
                         >
                           Technical
                         </button>
                         <button
                           onClick={() => setBriefView('human')}
-                          className={`text-xs px-2 py-1 rounded-sm ${briefView === 'human' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+                          className={`text-xs px-2 py-1 rounded-sm transition-colors duration-150 ${briefView === 'human' ? 'bg-emerald-600 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
                         >
                           Summary
                         </button>
@@ -305,22 +305,22 @@ export function ProjectDetailPage() {
 
                       {briefView === 'technical' ? (
                         <div className="text-sm space-y-2">
-                          <p className="text-zinc-600">{rec.human_friendly.one_liner}</p>
+                          <p className="text-zinc-400">{rec.human_friendly.one_liner}</p>
                           <div>
                             <span className="text-xs font-medium text-zinc-500">Effort:</span>
-                            <span className="ml-2 text-zinc-700">{rec.technical.effort.calibrated_estimate_days} days</span>
+                            <span className="ml-2 text-zinc-300">{rec.technical.effort.calibrated_estimate_days} days</span>
                             <span className="ml-2 badge badge-info">{rec.technical.effort.complexity}</span>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-sm text-zinc-600">
+                        <div className="text-sm text-zinc-400">
                           <p>{rec.human_friendly.summary}</p>
                         </div>
                       )}
 
                       <Link
                         to={`/projects/${project.id}/rec/${rec.id}`}
-                        className="inline-block mt-3 text-xs text-blue-600 hover:text-blue-800"
+                        className="inline-block mt-3 text-xs text-emerald-400 hover:text-emerald-300 transition-colors duration-150"
                       >
                         View full details →
                       </Link>
@@ -352,7 +352,7 @@ export function ProjectDetailPage() {
                       href={item.url || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-zinc-900 hover:text-blue-600"
+                      className="text-zinc-100 hover:text-emerald-400 transition-colors duration-150"
                     >
                       {item.title}
                     </a>
@@ -443,8 +443,8 @@ function OverviewTab({
   manifest: ProjectManifest | null;
 }) {
   function getHealthColor(score: number) {
-    if (score >= 0.8) return 'bg-green-500';
-    if (score >= 0.6) return 'bg-yellow-500';
+    if (score >= 0.8) return 'bg-emerald-500';
+    if (score >= 0.6) return 'bg-amber-500';
     if (score >= 0.4) return 'bg-orange-500';
     return 'bg-red-500';
   }
@@ -453,11 +453,11 @@ function OverviewTab({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Stack Health */}
       <div className="card">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Stack Health</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Stack Health</h3>
         {health ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="text-3xl font-semibold text-zinc-900">
+              <div className="text-3xl font-semibold text-zinc-100">
                 {Math.round(health.overall_score * 100)}%
               </div>
               <div className="flex-1">
@@ -473,7 +473,7 @@ function OverviewTab({
               {Object.entries(health.components).map(([key, val]) => (
                 <div key={key} className="flex justify-between">
                   <span className="text-zinc-500 capitalize">{key}</span>
-                  <span className="text-zinc-700">{Math.round(val.score * 100)}%</span>
+                  <span className="text-zinc-300">{Math.round(val.score * 100)}%</span>
                 </div>
               ))}
             </div>
@@ -485,13 +485,13 @@ function OverviewTab({
 
       {/* CF Findings */}
       <div className="card">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Code Findings</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Code Findings</h3>
         {findings.length > 0 ? (
           <div className="space-y-2">
             {findings.slice(0, 5).map((f) => (
               <div key={f.id} className="flex items-start gap-2 text-sm">
                 <span className={`badge badge-${f.severity}`}>{f.severity}</span>
-                <span className="text-zinc-600 text-xs">{f.description}</span>
+                <span className="text-zinc-400 text-xs">{f.description}</span>
               </div>
             ))}
             {findings.length > 5 && (
@@ -505,21 +505,21 @@ function OverviewTab({
 
       {/* Scouting Config */}
       <div className="card">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Scouting Config</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Scouting Config</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-zinc-500">Status</span>
-            <span className={`badge ${project.scouting_enabled ? 'badge-low' : 'badge-info'}`}>
+            <span className={`badge ${project.scouting_enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
               {project.scouting_enabled ? 'Active' : 'Paused'}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-zinc-500">Frequency</span>
-            <span className="text-zinc-700 capitalize">{project.scouting_frequency}</span>
+            <span className="text-zinc-300 capitalize">{project.scouting_frequency}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-zinc-500">Max Recommendations</span>
-            <span className="text-zinc-700">{project.max_recommendations}</span>
+            <span className="text-zinc-300">{project.max_recommendations}</span>
           </div>
           <div>
             <span className="text-zinc-500 block mb-1">Focus Areas</span>
@@ -534,7 +534,7 @@ function OverviewTab({
 
       {/* Data Collected (Privacy) */}
       <div className="card">
-        <h3 className="text-sm font-medium text-zinc-900 mb-3">Data Collected</h3>
+        <h3 className="text-sm font-medium text-zinc-100 mb-3">Data Collected</h3>
         <p className="text-xs text-zinc-500 mb-3">
           Only manifest data is analyzed. Source code is never accessed.
         </p>
@@ -542,19 +542,19 @@ function OverviewTab({
           <div className="space-y-2 text-xs">
             <div>
               <span className="text-zinc-500">Languages:</span>
-              <span className="ml-2 text-zinc-700">
+              <span className="ml-2 text-zinc-300">
                 {stack.languages.map(l => `${l.name} (${l.percentage}%)`).join(', ')}
               </span>
             </div>
             <div>
               <span className="text-zinc-500">Frameworks:</span>
-              <span className="ml-2 text-zinc-700">
+              <span className="ml-2 text-zinc-300">
                 {stack.frameworks.map(f => f.name).join(', ') || 'None detected'}
               </span>
             </div>
             <div>
               <span className="text-zinc-500">Dependencies:</span>
-              <span className="ml-2 text-zinc-700">
+              <span className="ml-2 text-zinc-300">
                 {Object.entries(stack.all_dependencies)
                   .map(([eco, data]) => `${eco}: ${data.direct + data.dev}`)
                   .join(', ')}
