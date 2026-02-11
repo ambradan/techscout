@@ -10,6 +10,7 @@
     "seed": "tsx scripts/seed-project.ts",
     "pipeline": "tsx scripts/run-pipeline.ts",
     "scheduled": "tsx scripts/scheduled-run.ts",
+    "server": "tsx src/server/webhook.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -18,13 +19,17 @@
     "@supabase/supabase-js": "^2.49.1",
     "@types/pdfkit": "^0.17.4",
     "dotenv": "^16.4.7",
+    "express": "^5.2.1",
     "nanoid": "^5.0.9",
     "octokit": "^4.1.0",
     "pdfkit": "^0.17.2",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
